@@ -7,7 +7,7 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Plus, Search, Clock } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
-import { WorkingHour, Employee, Client, Project } from "@/types/database";
+import { WorkingHour, Profile, Client, Project } from "@/types/database";
 import { useToast } from "@/hooks/use-toast";
 
 export const WorkingHours = () => {
@@ -16,7 +16,7 @@ export const WorkingHours = () => {
   const [filterClient, setFilterClient] = useState("all");
   
   const [workingHours, setWorkingHours] = useState<WorkingHour[]>([]);
-  const [employees, setEmployees] = useState<Employee[]>([]);
+  const [profiles, setProfiles] = useState<Profile[]>([]);
   const [clients, setClients] = useState<Client[]>([]);
   const [projects, setProjects] = useState<Project[]>([]);
   const [loading, setLoading] = useState(true);
@@ -34,7 +34,7 @@ export const WorkingHours = () => {
 
   useEffect(() => {
     fetchWorkingHours();
-    fetchEmployees();
+    fetchProfiles();
     fetchClients();
     fetchProjects();
   }, []);
@@ -45,14 +45,13 @@ export const WorkingHours = () => {
         .from('working_hours')
         .select(`
           *,
-          employees (id, name),
+          profiles (id, full_name),
           clients (id, company),
           projects (id, name)
         `)
         .order('date', { ascending: false });
 
       if (error) throw error;
-      // Type cast the data to ensure proper typing
       setWorkingHours((data || []) as WorkingHour[]);
     } catch (error) {
       console.error('Error fetching working hours:', error);
@@ -66,19 +65,18 @@ export const WorkingHours = () => {
     }
   };
 
-  const fetchEmployees = async () => {
+  const fetchProfiles = async () => {
     try {
       const { data, error } = await supabase
-        .from('employees')
+        .from('profiles')
         .select('*')
-        .eq('status', 'active')
-        .order('name');
+        .eq('is_active', true)
+        .order('full_name');
 
       if (error) throw error;
-      // Type cast the data to ensure proper typing
-      setEmployees((data || []) as Employee[]);
+      setProfiles((data || []) as Profile[]);
     } catch (error) {
-      console.error('Error fetching employees:', error);
+      console.error('Error fetching profiles:', error);
     }
   };
 
@@ -154,7 +152,7 @@ export const WorkingHours = () => {
   };
 
   const filteredHours = workingHours.filter(hour => {
-    const matchesSearch = hour.employees?.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    const matchesSearch = hour.profiles?.full_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
                          hour.clients?.company.toLowerCase().includes(searchTerm.toLowerCase()) ||
                          hour.projects?.name.toLowerCase().includes(searchTerm.toLowerCase());
     const matchesEmployee = filterEmployee === "all" || hour.employee_id === filterEmployee;
@@ -195,9 +193,9 @@ export const WorkingHours = () => {
                     <SelectValue placeholder="Select employee" />
                   </SelectTrigger>
                   <SelectContent>
-                    {employees.map((employee) => (
-                      <SelectItem key={employee.id} value={employee.id}>
-                        {employee.name}
+                    {profiles.map((profile) => (
+                      <SelectItem key={profile.id} value={profile.id}>
+                        {profile.full_name || profile.email}
                       </SelectItem>
                     ))}
                   </SelectContent>
@@ -325,9 +323,9 @@ export const WorkingHours = () => {
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">All Employees</SelectItem>
-                  {employees.map((employee) => (
-                    <SelectItem key={employee.id} value={employee.id}>
-                      {employee.name}
+                  {profiles.map((profile) => (
+                    <SelectItem key={profile.id} value={profile.id}>
+                      {profile.full_name || profile.email}
                     </SelectItem>
                   ))}
                 </SelectContent>
@@ -366,7 +364,7 @@ export const WorkingHours = () => {
               <tbody>
                 {filteredHours.map((hour) => (
                   <tr key={hour.id} className="border-b border-gray-100 hover:bg-gray-50">
-                    <td className="py-3 px-4 font-medium text-gray-900">{hour.employees?.name}</td>
+                    <td className="py-3 px-4 font-medium text-gray-900">{hour.profiles?.full_name || 'N/A'}</td>
                     <td className="py-3 px-4 text-gray-600">{hour.clients?.company}</td>
                     <td className="py-3 px-4 text-gray-600">{hour.projects?.name}</td>
                     <td className="py-3 px-4 text-gray-600">{hour.date}</td>

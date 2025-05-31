@@ -2,7 +2,7 @@
 import { useState } from "react";
 import { Sidebar } from "@/components/Sidebar";
 import { Dashboard } from "@/components/Dashboard";
-import { EmployeeManagement } from "@/components/EmployeeManagement";
+import { ProfileManagement } from "@/components/ProfileManagement";
 import { ClientManagement } from "@/components/ClientManagement";
 import { ProjectManagement } from "@/components/ProjectManagement";
 import { WorkingHours } from "@/components/WorkingHours";
@@ -29,7 +29,7 @@ const Index = () => {
       case "employees":
         return (
           <ProtectedRoute requiredPermission="employees_view">
-            <EmployeeManagement />
+            <ProfileManagement />
           </ProtectedRoute>
         );
       case "clients":

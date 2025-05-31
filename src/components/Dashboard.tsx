@@ -29,11 +29,11 @@ export const Dashboard = () => {
 
   const fetchDashboardStats = async () => {
     try {
-      // Fetch employees count
-      const { data: employees } = await supabase
-        .from('employees')
+      // Fetch profiles count
+      const { data: profiles } = await supabase
+        .from('profiles')
         .select('id')
-        .eq('status', 'active');
+        .eq('is_active', true);
 
       // Fetch active clients count
       const { data: clients } = await supabase
@@ -110,7 +110,7 @@ export const Dashboard = () => {
       const avgHoursPerDay = hoursThisWeek / 7;
 
       setStats({
-        totalEmployees: employees?.length || 0,
+        totalEmployees: profiles?.length || 0,
         activeClients: clients?.length || 0,
         currentProjects: projects?.length || 0,
         hoursThisWeek: Math.round(hoursThisWeek * 10) / 10,
@@ -133,7 +133,7 @@ export const Dashboard = () => {
         .from('working_hours')
         .select(`
           *,
-          employees(name),
+          profiles(full_name),
           clients(company),
           projects(name)
         `)
@@ -149,7 +149,7 @@ export const Dashboard = () => {
       const activities = [
         ...(recentHours?.map(h => ({
           type: 'hours',
-          description: `${h.employees?.name} logged ${h.total_hours}h for ${h.projects?.name}`,
+          description: `${h.profiles?.full_name} logged ${h.total_hours}h for ${h.projects?.name}`,
           time: new Date(h.created_at).toLocaleDateString(),
           color: 'bg-blue-500'
         })) || []),
@@ -176,13 +176,13 @@ export const Dashboard = () => {
         .from('working_hours')
         .select(`
           total_hours,
-          employees(id, name)
+          profiles(id, full_name)
         `)
         .gte('date', weekStart.toISOString().split('T')[0]);
 
       const employeeHours = weeklyHours?.reduce((acc: any, curr) => {
-        const employeeId = curr.employees?.id;
-        const employeeName = curr.employees?.name;
+        const employeeId = curr.profiles?.id;
+        const employeeName = curr.profiles?.full_name;
         if (employeeId && employeeName) {
           if (!acc[employeeId]) {
             acc[employeeId] = { name: employeeName, hours: 0 };

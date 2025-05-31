@@ -1,12 +1,13 @@
 
-export interface Employee {
+export interface Profile {
   id: string;
-  name: string;
-  email: string;
-  phone?: string;
-  role: string;
+  email: string | null;
+  full_name: string | null;
+  avatar_url: string | null;
+  role: 'admin' | 'employee' | 'accountant' | 'operation' | 'sales_manager';
+  is_active: boolean;
+  phone: string | null;
   hourly_rate: number;
-  status: 'active' | 'inactive';
   created_at: string;
   updated_at: string;
 }
@@ -48,7 +49,7 @@ export interface WorkingHour {
   status: 'pending' | 'approved' | 'rejected';
   created_at: string;
   updated_at: string;
-  employees?: Employee;
+  profiles?: Profile;
   clients?: Client;
   projects?: Project;
 }
@@ -67,7 +68,7 @@ export interface BankTransaction {
   employee_id?: string;
   clients?: Client;
   projects?: Project;
-  employees?: Employee;
+  profiles?: Profile;
 }
 
 export interface Payroll {
@@ -83,5 +84,5 @@ export interface Payroll {
   status: 'pending' | 'approved' | 'paid';
   created_at: string;
   updated_at: string;
-  employees?: Employee;
+  profiles?: Profile;
 }
