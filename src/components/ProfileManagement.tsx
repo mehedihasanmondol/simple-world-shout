@@ -9,6 +9,7 @@ import { Profile } from "@/types/database";
 import { useToast } from "@/hooks/use-toast";
 import { ProfileForm } from "./profile/ProfileForm";
 import { ProfileTable } from "./profile/ProfileTable";
+import { ProfileStats } from "./profile/ProfileStats";
 
 export const ProfileManagement = () => {
   const [searchTerm, setSearchTerm] = useState("");
@@ -110,9 +111,6 @@ export const ProfileManagement = () => {
     profile.role.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
-  const activeProfiles = filteredProfiles.filter(profile => profile.is_active);
-  const inactiveProfiles = filteredProfiles.filter(profile => !profile.is_active);
-
   if (loading && profiles.length === 0) {
     return <div className="flex justify-center items-center h-64">Loading...</div>;
   }
@@ -141,46 +139,7 @@ export const ProfileManagement = () => {
       </div>
 
       {/* Stats Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium text-gray-600">
-              Total Profiles
-            </CardTitle>
-            <Users className="h-4 w-4 text-blue-600" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-blue-600">{profiles.length}</div>
-            <p className="text-xs text-muted-foreground">All team members</p>
-          </CardContent>
-        </Card>
-        
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium text-gray-600">
-              Active Profiles
-            </CardTitle>
-            <Users className="h-4 w-4 text-green-600" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-green-600">{activeProfiles.length}</div>
-            <p className="text-xs text-muted-foreground">Currently active</p>
-          </CardContent>
-        </Card>
-        
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium text-gray-600">
-              Inactive Profiles
-            </CardTitle>
-            <Users className="h-4 w-4 text-gray-600" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-gray-600">{inactiveProfiles.length}</div>
-            <p className="text-xs text-muted-foreground">Deactivated members</p>
-          </CardContent>
-        </Card>
-      </div>
+      <ProfileStats profiles={profiles} />
 
       {/* Search and Filter */}
       <Card>

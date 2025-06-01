@@ -67,8 +67,8 @@ export const PersonalDashboard = () => {
         .eq('profile_id', profile.id)
         .eq('date', todayString);
 
-      // Default hourly rate
-      let hourlyRate = 25;
+      // Use profile hourly rate or default
+      const hourlyRate = profile.hourly_rate || 25;
 
       // Calculate stats
       const hoursThisWeek = weeklyHours?.reduce((sum, h) => sum + h.total_hours, 0) || 0;
