@@ -59,7 +59,7 @@ export const PayrollComponent = () => {
         .from('payroll')
         .select(`
           *,
-          profiles (id, full_name, role)
+          profiles!payroll_profile_id_fkey (id, full_name, role)
         `)
         .order('created_at', { ascending: false });
 
@@ -93,7 +93,7 @@ export const PayrollComponent = () => {
       if (!profile) return;
 
       const totalHours = (workingHours || []).reduce((sum, wh) => sum + (wh.total_hours || 0), 0);
-      const hourlyRate = 25; // Default hourly rate
+      const hourlyRate = (profile as any).hourly_rate || 25;
       const grossPay = totalHours * hourlyRate;
       const netPay = grossPay - formData.deductions;
 

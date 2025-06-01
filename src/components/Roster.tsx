@@ -1,3 +1,4 @@
+
 import { useState, useEffect } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -7,20 +8,23 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
-import { Plus, Calendar as CalendarIcon, Clock, User } from "lucide-react";
+import { Textarea } from "@/components/ui/textarea";
+import { Plus, Calendar as CalendarIcon, Clock, User, Edit, AlertCircle } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
-import { WorkingHour, Profile, Client, Project } from "@/types/database";
+import { WorkingHour, Profile, Client, Project, Roster } from "@/types/database";
 import { useToast } from "@/hooks/use-toast";
 import { ProfileSelector } from "@/components/common/ProfileSelector";
 
 export const Roster = () => {
   const [selectedDate, setSelectedDate] = useState<Date | undefined>(new Date());
+  const [rosters, setRosters] = useState<Roster[]>([]);
   const [workingHours, setWorkingHours] = useState<WorkingHour[]>([]);
   const [profiles, setProfiles] = useState<Profile[]>([]);
   const [clients, setClients] = useState<Client[]>([]);
   const [projects, setProjects] = useState<Project[]>([]);
   const [loading, setLoading] = useState(true);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
+  const [editingRoster, setEditingRoster] = useState<Roster | null>(null);
   const { toast } = useToast();
 
   const [formData, setFormData] = useState({
@@ -30,35 +34,61 @@ export const Roster = () => {
     date: "",
     start_time: "",
     end_time: "",
+    notes: "",
     status: "pending"
   });
 
   useEffect(() => {
-    fetchWorkingHours();
+    if (selectedDate) {
+      fetchRosterData();
+    }
+  }, [selectedDate]);
+
+  useEffect(() => {
     fetchProfiles();
     fetchClients();
     fetchProjects();
-  }, [selectedDate]);
+  }, []);
 
-  const fetchWorkingHours = async () => {
+  const fetchRosterData = async () => {
+    if (!selectedDate) return;
+    
+    setLoading(true);
     try {
-      const dateStr = selectedDate ? selectedDate.toISOString().split('T')[0] : new Date().toISOString().split('T')[0];
+      const dateStr = selectedDate.toISOString().split('T')[0];
       
-      const { data, error } = await supabase
-        .from('working_hours')
+      // Fetch rosters for selected date
+      const { data: rosterData, error: rosterError } = await supabase
+        .from('rosters')
         .select(`
           *,
-          profiles (id, full_name, role),
-          clients (id, company),
-          projects (id, name)
+          profiles!rosters_profile_id_fkey (id, full_name, role),
+          clients!rosters_client_id_fkey (id, company),
+          projects!rosters_project_id_fkey (id, name)
         `)
         .eq('date', dateStr)
         .order('start_time');
 
-      if (error) throw error;
-      setWorkingHours(data as WorkingHour[]);
+      if (rosterError) throw rosterError;
+      setRosters(rosterData as Roster[]);
+
+      // Fetch working hours for selected date to check approval status
+      const { data: workingHoursData, error: whError } = await supabase
+        .from('working_hours')
+        .select(`
+          *,
+          profiles!working_hours_profile_id_fkey (id, full_name, role),
+          clients!working_hours_client_id_fkey (id, company),
+          projects!working_hours_project_id_fkey (id, name)
+        `)
+        .eq('date', dateStr)
+        .order('start_time');
+
+      if (whError) throw whError;
+      setWorkingHours(workingHoursData as WorkingHour[]);
+      
     } catch (error) {
-      console.error('Error fetching working hours:', error);
+      console.error('Error fetching roster data:', error);
       toast({
         title: "Error",
         description: "Failed to fetch roster data",
@@ -125,6 +155,17 @@ export const Roster = () => {
     return Math.max(0, diffHours);
   };
 
+  const getApprovedHoursForRoster = (rosterId: string) => {
+    return workingHours.filter(wh => 
+      wh.roster_id === rosterId && wh.status === 'approved'
+    ).length;
+  };
+
+  const isRosterEditable = (roster: Roster) => {
+    const approvedHours = getApprovedHoursForRoster(roster.id);
+    return approvedHours === 0 && !roster.is_locked;
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
@@ -132,27 +173,32 @@ export const Roster = () => {
     try {
       const totalHours = calculateTotalHours(formData.start_time, formData.end_time);
       
-      const { error } = await supabase
-        .from('working_hours')
-        .insert([{
-          ...formData,
-          total_hours: totalHours
-        }]);
+      const rosterData = {
+        ...formData,
+        total_hours: totalHours
+      };
 
-      if (error) throw error;
-      toast({ title: "Success", description: "Roster entry added successfully" });
+      if (editingRoster) {
+        const { error } = await supabase
+          .from('rosters')
+          .update(rosterData)
+          .eq('id', editingRoster.id);
+
+        if (error) throw error;
+        toast({ title: "Success", description: "Roster updated successfully" });
+      } else {
+        const { error } = await supabase
+          .from('rosters')
+          .insert([rosterData]);
+
+        if (error) throw error;
+        toast({ title: "Success", description: "Roster entry added successfully" });
+      }
       
       setIsDialogOpen(false);
-      setFormData({
-        profile_id: "",
-        client_id: "",
-        project_id: "",
-        date: "",
-        start_time: "",
-        end_time: "",
-        status: "pending"
-      });
-      fetchWorkingHours();
+      setEditingRoster(null);
+      resetForm();
+      fetchRosterData();
     } catch (error) {
       console.error('Error saving roster entry:', error);
       toast({
@@ -165,15 +211,48 @@ export const Roster = () => {
     }
   };
 
-  const getProfileHours = (profileId: string) => {
-    return workingHours.filter(wh => wh.profile_id === profileId);
+  const resetForm = () => {
+    setFormData({
+      profile_id: "",
+      client_id: "",
+      project_id: "",
+      date: selectedDate ? selectedDate.toISOString().split('T')[0] : "",
+      start_time: "",
+      end_time: "",
+      notes: "",
+      status: "pending"
+    });
+  };
+
+  const handleEdit = (roster: Roster) => {
+    if (!isRosterEditable(roster)) {
+      toast({
+        title: "Cannot Edit",
+        description: "This roster cannot be edited because it has approved working hours.",
+        variant: "destructive"
+      });
+      return;
+    }
+
+    setEditingRoster(roster);
+    setFormData({
+      profile_id: roster.profile_id,
+      client_id: roster.client_id,
+      project_id: roster.project_id,
+      date: roster.date,
+      start_time: roster.start_time,
+      end_time: roster.end_time,
+      notes: roster.notes || "",
+      status: roster.status
+    });
+    setIsDialogOpen(true);
   };
 
   const getTotalHoursForDay = () => {
-    return workingHours.reduce((total, wh) => total + wh.total_hours, 0);
+    return rosters.reduce((total, roster) => total + roster.total_hours, 0);
   };
 
-  if (loading && workingHours.length === 0) {
+  if (loading && rosters.length === 0) {
     return <div className="flex justify-center items-center h-64">Loading...</div>;
   }
 
@@ -184,15 +263,8 @@ export const Roster = () => {
         <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
           <DialogTrigger asChild>
             <Button className="flex items-center gap-2" onClick={() => {
-              setFormData({
-                profile_id: "",
-                client_id: "",
-                project_id: "",
-                date: selectedDate ? selectedDate.toISOString().split('T')[0] : "",
-                start_time: "",
-                end_time: "",
-                status: "pending"
-              });
+              setEditingRoster(null);
+              resetForm();
             }}>
               <Plus className="h-4 w-4" />
               Add Roster Entry
@@ -200,10 +272,9 @@ export const Roster = () => {
           </DialogTrigger>
           <DialogContent className="max-w-md">
             <DialogHeader>
-              <DialogTitle>Add New Roster Entry</DialogTitle>
+              <DialogTitle>{editingRoster ? "Edit Roster Entry" : "Add New Roster Entry"}</DialogTitle>
             </DialogHeader>
             <form onSubmit={handleSubmit} className="space-y-4">
-              {/* Enhanced Profile Selection */}
               <ProfileSelector
                 profiles={profiles}
                 selectedProfileId={formData.profile_id}
@@ -279,8 +350,18 @@ export const Roster = () => {
                 </div>
               </div>
 
+              <div>
+                <Label htmlFor="notes">Notes</Label>
+                <Textarea
+                  id="notes"
+                  placeholder="Add any notes for this roster entry..."
+                  value={formData.notes}
+                  onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
+                />
+              </div>
+
               <Button type="submit" disabled={loading} className="w-full">
-                {loading ? "Saving..." : "Add Roster Entry"}
+                {loading ? "Saving..." : editingRoster ? "Update Roster Entry" : "Add Roster Entry"}
               </Button>
             </form>
           </DialogContent>
@@ -310,7 +391,7 @@ export const Roster = () => {
             <div className="flex items-center justify-between">
               <CardTitle className="flex items-center gap-2">
                 <Clock className="h-5 w-5" />
-                Daily Schedule - {selectedDate?.toDateString()}
+                Daily Roster - {selectedDate?.toDateString()}
               </CardTitle>
               <Badge variant="outline" className="flex items-center gap-1">
                 <User className="h-3 w-3" />
@@ -321,8 +402,8 @@ export const Roster = () => {
           <CardContent>
             <div className="space-y-4">
               {profiles.map((profile) => {
-                const profileHours = getProfileHours(profile.id);
-                const totalHours = profileHours.reduce((sum, wh) => sum + wh.total_hours, 0);
+                const profileRosters = rosters.filter(r => r.profile_id === profile.id);
+                const totalHours = profileRosters.reduce((sum, r) => sum + r.total_hours, 0);
                 
                 return (
                   <div key={profile.id} className="border rounded-lg p-4">
@@ -334,22 +415,49 @@ export const Roster = () => {
                       <Badge variant="outline">{totalHours.toFixed(1)}h</Badge>
                     </div>
                     
-                    {profileHours.length > 0 ? (
+                    {profileRosters.length > 0 ? (
                       <div className="space-y-2">
-                        {profileHours.map((hour) => (
-                          <div key={hour.id} className="flex items-center justify-between p-2 bg-gray-50 rounded">
-                            <div className="flex items-center gap-2">
-                              <span className="text-sm font-medium">{hour.start_time} - {hour.end_time}</span>
-                              <span className="text-sm text-gray-600">({hour.total_hours}h)</span>
+                        {profileRosters.map((roster) => {
+                          const approvedHours = getApprovedHoursForRoster(roster.id);
+                          const isEditable = isRosterEditable(roster);
+                          
+                          return (
+                            <div key={roster.id} className="flex items-center justify-between p-3 bg-gray-50 rounded">
+                              <div className="flex-1">
+                                <div className="flex items-center gap-2 mb-1">
+                                  <span className="text-sm font-medium">{roster.start_time} - {roster.end_time}</span>
+                                  <span className="text-sm text-gray-600">({roster.total_hours}h)</span>
+                                </div>
+                                <div className="flex items-center gap-2 mb-1">
+                                  <span className="text-sm text-gray-600">{roster.projects?.name}</span>
+                                  <Badge variant={roster.status === "confirmed" ? "default" : roster.status === "pending" ? "secondary" : "outline"} className="text-xs">
+                                    {roster.status}
+                                  </Badge>
+                                </div>
+                                {!isEditable && (
+                                  <div className="flex items-center gap-1 text-xs text-orange-600">
+                                    <AlertCircle className="h-3 w-3" />
+                                    <span>Roster not editable: {approvedHours} hour(s) already approved</span>
+                                  </div>
+                                )}
+                                {roster.notes && (
+                                  <p className="text-xs text-gray-500 mt-1">{roster.notes}</p>
+                                )}
+                              </div>
+                              <div className="flex items-center gap-2">
+                                <Button 
+                                  variant="ghost" 
+                                  size="sm" 
+                                  onClick={() => handleEdit(roster)}
+                                  disabled={!isEditable}
+                                  className={!isEditable ? "opacity-50 cursor-not-allowed" : ""}
+                                >
+                                  <Edit className="h-4 w-4" />
+                                </Button>
+                              </div>
                             </div>
-                            <div className="flex items-center gap-2">
-                              <span className="text-sm text-gray-600">{hour.projects?.name}</span>
-                              <Badge variant={hour.status === "approved" ? "default" : hour.status === "pending" ? "secondary" : "outline"} className="text-xs">
-                                {hour.status}
-                              </Badge>
-                            </div>
-                          </div>
-                        ))}
+                          );
+                        })}
                       </div>
                     ) : (
                       <p className="text-sm text-gray-500 italic">No scheduled hours</p>

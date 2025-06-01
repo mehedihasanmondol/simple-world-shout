@@ -68,7 +68,7 @@ export const PersonalDashboard = () => {
         .eq('date', todayString);
 
       // Use profile hourly rate or default
-      const hourlyRate = profile.hourly_rate || 25;
+      const hourlyRate = (profile as any).hourly_rate || 25;
 
       // Calculate stats
       const hoursThisWeek = weeklyHours?.reduce((sum, h) => sum + h.total_hours, 0) || 0;
@@ -101,8 +101,8 @@ export const PersonalDashboard = () => {
         .from('working_hours')
         .select(`
           *,
-          clients(company),
-          projects(name)
+          clients!working_hours_client_id_fkey(company),
+          projects!working_hours_project_id_fkey(name)
         `)
         .eq('profile_id', profile.id)
         .order('created_at', { ascending: false })
@@ -136,8 +136,8 @@ export const PersonalDashboard = () => {
         .from('working_hours')
         .select(`
           *,
-          projects(name),
-          clients(company)
+          projects!working_hours_project_id_fkey(name),
+          clients!working_hours_client_id_fkey(company)
         `)
         .eq('profile_id', profile.id)
         .gte('date', tomorrow.toISOString().split('T')[0])

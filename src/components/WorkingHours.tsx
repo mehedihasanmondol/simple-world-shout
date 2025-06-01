@@ -3,14 +3,15 @@ import { useState, useEffect } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Plus, Search, Edit, Trash2 } from "lucide-react";
+import { Plus, Search, Clock, CheckCircle, XCircle } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { WorkingHour, Profile, Client, Project } from "@/types/database";
 import { useToast } from "@/hooks/use-toast";
+import { ProfileSelector } from "@/components/common/ProfileSelector";
 
 export const WorkingHours = () => {
   const [searchTerm, setSearchTerm] = useState("");
@@ -20,18 +21,16 @@ export const WorkingHours = () => {
   const [projects, setProjects] = useState<Project[]>([]);
   const [loading, setLoading] = useState(true);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
-  const [editingHour, setEditingHour] = useState<WorkingHour | null>(null);
   const { toast } = useToast();
 
   const [formData, setFormData] = useState({
     profile_id: "",
     client_id: "",
     project_id: "",
-    date: new Date().toISOString().split('T')[0],
+    date: "",
     start_time: "",
     end_time: "",
-    total_hours: 0,
-    status: "pending" as "pending" | "approved" | "rejected"
+    status: "pending"
   });
 
   useEffect(() => {
@@ -47,11 +46,11 @@ export const WorkingHours = () => {
         .from('working_hours')
         .select(`
           *,
-          profiles (id, full_name, role),
-          clients (id, company),
-          projects (id, name)
+          profiles!working_hours_profile_id_fkey (id, full_name, role),
+          clients!working_hours_client_id_fkey (id, company),
+          projects!working_hours_project_id_fkey (id, name)
         `)
-        .order('date', { ascending: false });
+        .order('created_at', { ascending: false });
 
       if (error) throw error;
       setWorkingHours(data as WorkingHour[]);
@@ -130,39 +129,24 @@ export const WorkingHours = () => {
     try {
       const totalHours = calculateTotalHours(formData.start_time, formData.end_time);
       
-      if (editingHour) {
-        const { error } = await supabase
-          .from('working_hours')
-          .update({
-            ...formData,
-            total_hours: totalHours
-          })
-          .eq('id', editingHour.id);
+      const { error } = await supabase
+        .from('working_hours')
+        .insert([{
+          ...formData,
+          total_hours: totalHours
+        }]);
 
-        if (error) throw error;
-        toast({ title: "Success", description: "Working hours updated successfully" });
-      } else {
-        const { error } = await supabase
-          .from('working_hours')
-          .insert([{
-            ...formData,
-            total_hours: totalHours
-          }]);
-
-        if (error) throw error;
-        toast({ title: "Success", description: "Working hours logged successfully" });
-      }
-
+      if (error) throw error;
+      toast({ title: "Success", description: "Working hours logged successfully" });
+      
       setIsDialogOpen(false);
-      setEditingHour(null);
       setFormData({
         profile_id: "",
         client_id: "",
         project_id: "",
-        date: new Date().toISOString().split('T')[0],
+        date: "",
         start_time: "",
         end_time: "",
-        total_hours: 0,
         status: "pending"
       });
       fetchWorkingHours();
@@ -178,47 +162,32 @@ export const WorkingHours = () => {
     }
   };
 
-  const handleEdit = (hour: WorkingHour) => {
-    setEditingHour(hour);
-    setFormData({
-      profile_id: hour.profile_id,
-      client_id: hour.client_id,
-      project_id: hour.project_id,
-      date: hour.date,
-      start_time: hour.start_time,
-      end_time: hour.end_time,
-      total_hours: hour.total_hours,
-      status: hour.status as "pending" | "approved" | "rejected"
-    });
-    setIsDialogOpen(true);
-  };
-
-  const handleDelete = async (id: string) => {
-    if (!confirm("Are you sure you want to delete this working hour entry?")) return;
-
+  const updateStatus = async (id: string, status: 'approved' | 'rejected') => {
     try {
       const { error } = await supabase
         .from('working_hours')
-        .delete()
+        .update({ status })
         .eq('id', id);
 
       if (error) throw error;
-      toast({ title: "Success", description: "Working hours deleted successfully" });
+      toast({ 
+        title: "Success", 
+        description: `Working hours ${status} successfully` 
+      });
       fetchWorkingHours();
     } catch (error) {
-      console.error('Error deleting working hours:', error);
+      console.error('Error updating status:', error);
       toast({
         title: "Error",
-        description: "Failed to delete working hours",
+        description: "Failed to update status",
         variant: "destructive"
       });
     }
   };
 
-  const filteredWorkingHours = workingHours.filter(hour =>
-    hour.profiles?.full_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    hour.clients?.company?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    hour.projects?.name?.toLowerCase().includes(searchTerm.toLowerCase())
+  const filteredWorkingHours = workingHours.filter(wh =>
+    (wh.profiles?.full_name || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+    (wh.projects?.name || '').toLowerCase().includes(searchTerm.toLowerCase())
   );
 
   if (loading && workingHours.length === 0) {
@@ -228,46 +197,33 @@ export const WorkingHours = () => {
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
-        <h1 className="text-3xl font-bold text-gray-900">Working Hours</h1>
+        <div className="flex items-center gap-3">
+          <Clock className="h-8 w-8 text-blue-600" />
+          <div>
+            <h1 className="text-3xl font-bold text-gray-900">Working Hours</h1>
+            <p className="text-gray-600">Track and manage team working hours</p>
+          </div>
+        </div>
         <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
           <DialogTrigger asChild>
-            <Button className="flex items-center gap-2" onClick={() => {
-              setEditingHour(null);
-              setFormData({
-                profile_id: "",
-                client_id: "",
-                project_id: "",
-                date: new Date().toISOString().split('T')[0],
-                start_time: "",
-                end_time: "",
-                total_hours: 0,
-                status: "pending"
-              });
-            }}>
+            <Button className="flex items-center gap-2">
               <Plus className="h-4 w-4" />
               Log Hours
             </Button>
           </DialogTrigger>
-          <DialogContent>
+          <DialogContent className="max-w-md">
             <DialogHeader>
-              <DialogTitle>{editingHour ? "Edit Working Hours" : "Log New Working Hours"}</DialogTitle>
+              <DialogTitle>Log Working Hours</DialogTitle>
             </DialogHeader>
             <form onSubmit={handleSubmit} className="space-y-4">
-              <div>
-                <Label htmlFor="profile_id">Profile</Label>
-                <Select value={formData.profile_id} onValueChange={(value) => setFormData({ ...formData, profile_id: value })}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select profile" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {profiles.map((profile) => (
-                      <SelectItem key={profile.id} value={profile.id}>
-                        {profile.full_name} - {profile.role}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
+              <ProfileSelector
+                profiles={profiles}
+                selectedProfileId={formData.profile_id}
+                onProfileSelect={(profileId) => setFormData({ ...formData, profile_id: profileId })}
+                label="Select Profile"
+                placeholder="Choose a team member"
+                showRoleFilter={true}
+              />
               
               <div>
                 <Label htmlFor="client_id">Client</Label>
@@ -319,11 +275,7 @@ export const WorkingHours = () => {
                     id="start_time"
                     type="time"
                     value={formData.start_time}
-                    onChange={(e) => {
-                      const newFormData = { ...formData, start_time: e.target.value };
-                      newFormData.total_hours = calculateTotalHours(newFormData.start_time, newFormData.end_time);
-                      setFormData(newFormData);
-                    }}
+                    onChange={(e) => setFormData({ ...formData, start_time: e.target.value })}
                     required
                   />
                 </div>
@@ -333,44 +285,14 @@ export const WorkingHours = () => {
                     id="end_time"
                     type="time"
                     value={formData.end_time}
-                    onChange={(e) => {
-                      const newFormData = { ...formData, end_time: e.target.value };
-                      newFormData.total_hours = calculateTotalHours(newFormData.start_time, newFormData.end_time);
-                      setFormData(newFormData);
-                    }}
+                    onChange={(e) => setFormData({ ...formData, end_time: e.target.value })}
                     required
                   />
                 </div>
               </div>
 
-              <div>
-                <Label htmlFor="total_hours">Total Hours (calculated)</Label>
-                <Input
-                  id="total_hours"
-                  type="number"
-                  step="0.25"
-                  value={formData.total_hours}
-                  readOnly
-                  className="bg-gray-100"
-                />
-              </div>
-
-              <div>
-                <Label htmlFor="status">Status</Label>
-                <Select value={formData.status} onValueChange={(value: "pending" | "approved" | "rejected") => setFormData({ ...formData, status: value })}>
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="pending">Pending</SelectItem>
-                    <SelectItem value="approved">Approved</SelectItem>
-                    <SelectItem value="rejected">Rejected</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-
               <Button type="submit" disabled={loading} className="w-full">
-                {loading ? "Saving..." : editingHour ? "Update Hours" : "Log Hours"}
+                {loading ? "Saving..." : "Log Hours"}
               </Button>
             </form>
           </DialogContent>
@@ -380,11 +302,11 @@ export const WorkingHours = () => {
       <Card>
         <CardHeader>
           <div className="flex items-center justify-between">
-            <CardTitle>Working Hours ({workingHours.length})</CardTitle>
+            <CardTitle>Working Hours Log ({filteredWorkingHours.length})</CardTitle>
             <div className="relative w-64">
               <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
               <Input
-                placeholder="Search working hours..."
+                placeholder="Search by name or project..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
                 className="pl-10"
@@ -398,40 +320,67 @@ export const WorkingHours = () => {
               <thead>
                 <tr className="border-b border-gray-200">
                   <th className="text-left py-3 px-4 font-medium text-gray-600">Profile</th>
-                  <th className="text-left py-3 px-4 font-medium text-gray-600">Client</th>
                   <th className="text-left py-3 px-4 font-medium text-gray-600">Project</th>
                   <th className="text-left py-3 px-4 font-medium text-gray-600">Date</th>
-                  <th className="text-left py-3 px-4 font-medium text-gray-600">Start Time</th>
-                  <th className="text-left py-3 px-4 font-medium text-gray-600">End Time</th>
-                  <th className="text-left py-3 px-4 font-medium text-gray-600">Total Hours</th>
+                  <th className="text-left py-3 px-4 font-medium text-gray-600">Time</th>
+                  <th className="text-left py-3 px-4 font-medium text-gray-600">Hours</th>
                   <th className="text-left py-3 px-4 font-medium text-gray-600">Status</th>
                   <th className="text-left py-3 px-4 font-medium text-gray-600">Actions</th>
                 </tr>
               </thead>
               <tbody>
-                {filteredWorkingHours.map((hour) => (
-                  <tr key={hour.id} className="border-b border-gray-100 hover:bg-gray-50">
-                    <td className="py-3 px-4 font-medium text-gray-900">{hour.profiles?.full_name}</td>
-                    <td className="py-3 px-4 text-gray-600">{hour.clients?.company}</td>
-                    <td className="py-3 px-4 text-gray-600">{hour.projects?.name}</td>
-                    <td className="py-3 px-4 text-gray-600">{new Date(hour.date).toLocaleDateString()}</td>
-                    <td className="py-3 px-4 text-gray-600">{hour.start_time}</td>
-                    <td className="py-3 px-4 text-gray-600">{hour.end_time}</td>
-                    <td className="py-3 px-4 text-gray-600">{hour.total_hours}h</td>
+                {filteredWorkingHours.map((wh) => (
+                  <tr key={wh.id} className="border-b border-gray-100 hover:bg-gray-50">
                     <td className="py-3 px-4">
-                      <Badge variant={hour.status === "approved" ? "default" : hour.status === "pending" ? "secondary" : "outline"}>
-                        {hour.status}
+                      <div>
+                        <div className="font-medium text-gray-900">{wh.profiles?.full_name || 'N/A'}</div>
+                        <div className="text-sm text-gray-600">{wh.profiles?.role || 'N/A'}</div>
+                      </div>
+                    </td>
+                    <td className="py-3 px-4">
+                      <div>
+                        <div className="font-medium text-gray-900">{wh.projects?.name || 'N/A'}</div>
+                        <div className="text-sm text-gray-600">{wh.clients?.company || 'N/A'}</div>
+                      </div>
+                    </td>
+                    <td className="py-3 px-4 text-gray-600">
+                      {new Date(wh.date).toLocaleDateString()}
+                    </td>
+                    <td className="py-3 px-4 text-gray-600">
+                      {wh.start_time} - {wh.end_time}
+                    </td>
+                    <td className="py-3 px-4 text-gray-600">
+                      {wh.total_hours}h
+                    </td>
+                    <td className="py-3 px-4">
+                      <Badge variant={
+                        wh.status === "approved" ? "default" : 
+                        wh.status === "pending" ? "secondary" : "outline"
+                      }>
+                        {wh.status}
                       </Badge>
                     </td>
                     <td className="py-3 px-4">
-                      <div className="flex items-center gap-2">
-                        <Button variant="ghost" size="sm" onClick={() => handleEdit(hour)}>
-                          <Edit className="h-4 w-4" />
-                        </Button>
-                        <Button variant="ghost" size="sm" className="text-red-600 hover:text-red-700" onClick={() => handleDelete(hour.id)}>
-                          <Trash2 className="h-4 w-4" />
-                        </Button>
-                      </div>
+                      {wh.status === "pending" && (
+                        <div className="flex items-center gap-2">
+                          <Button 
+                            size="sm" 
+                            variant="outline"
+                            onClick={() => updateStatus(wh.id, "approved")}
+                            className="text-green-600 hover:text-green-700"
+                          >
+                            <CheckCircle className="h-4 w-4" />
+                          </Button>
+                          <Button 
+                            size="sm" 
+                            variant="outline"
+                            onClick={() => updateStatus(wh.id, "rejected")}
+                            className="text-red-600 hover:text-red-700"
+                          >
+                            <XCircle className="h-4 w-4" />
+                          </Button>
+                        </div>
+                      )}
                     </td>
                   </tr>
                 ))}
