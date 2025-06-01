@@ -11,20 +11,40 @@ import { Badge } from "@/components/ui/badge";
 import { Textarea } from "@/components/ui/textarea";
 import { Plus, Calendar as CalendarIcon, Clock, User, Edit, AlertCircle } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
-import { WorkingHour, Profile, Client, Project, Roster } from "@/types/database";
+import { WorkingHour, Profile, Client, Project } from "@/types/database";
 import { useToast } from "@/hooks/use-toast";
 import { ProfileSelector } from "@/components/common/ProfileSelector";
 
+// Define a local interface for Roster to avoid naming conflicts
+interface RosterEntry {
+  id: string;
+  profile_id: string;
+  client_id: string;
+  project_id: string;
+  date: string;
+  start_time: string;
+  end_time: string;
+  total_hours: number;
+  status: string;
+  notes?: string;
+  is_locked: boolean;
+  created_at: string;
+  updated_at: string;
+  profiles?: Profile;
+  clients?: Client;
+  projects?: Project;
+}
+
 export const Roster = () => {
   const [selectedDate, setSelectedDate] = useState<Date | undefined>(new Date());
-  const [rosters, setRosters] = useState<Roster[]>([]);
+  const [rosters, setRosters] = useState<RosterEntry[]>([]);
   const [workingHours, setWorkingHours] = useState<WorkingHour[]>([]);
   const [profiles, setProfiles] = useState<Profile[]>([]);
   const [clients, setClients] = useState<Client[]>([]);
   const [projects, setProjects] = useState<Project[]>([]);
   const [loading, setLoading] = useState(true);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
-  const [editingRoster, setEditingRoster] = useState<Roster | null>(null);
+  const [editingRoster, setEditingRoster] = useState<RosterEntry | null>(null);
   const { toast } = useToast();
 
   const [formData, setFormData] = useState({
@@ -70,7 +90,15 @@ export const Roster = () => {
         .order('start_time');
 
       if (rosterError) throw rosterError;
-      setRosters(rosterData as Roster[]);
+      
+      const rosterEntries = (rosterData || []).map(roster => ({
+        ...roster,
+        profiles: Array.isArray(roster.profiles) ? roster.profiles[0] : roster.profiles,
+        clients: Array.isArray(roster.clients) ? roster.clients[0] : roster.clients,
+        projects: Array.isArray(roster.projects) ? roster.projects[0] : roster.projects
+      }));
+      
+      setRosters(rosterEntries as RosterEntry[]);
 
       // Fetch working hours for selected date to check approval status
       const { data: workingHoursData, error: whError } = await supabase
@@ -85,7 +113,15 @@ export const Roster = () => {
         .order('start_time');
 
       if (whError) throw whError;
-      setWorkingHours(workingHoursData as WorkingHour[]);
+      
+      const workingHoursEntries = (workingHoursData || []).map(wh => ({
+        ...wh,
+        profiles: Array.isArray(wh.profiles) ? wh.profiles[0] : wh.profiles,
+        clients: Array.isArray(wh.clients) ? wh.clients[0] : wh.clients,
+        projects: Array.isArray(wh.projects) ? wh.projects[0] : wh.projects
+      }));
+      
+      setWorkingHours(workingHoursEntries as WorkingHour[]);
       
     } catch (error) {
       console.error('Error fetching roster data:', error);
@@ -161,7 +197,7 @@ export const Roster = () => {
     ).length;
   };
 
-  const isRosterEditable = (roster: Roster) => {
+  const isRosterEditable = (roster: RosterEntry) => {
     const approvedHours = getApprovedHoursForRoster(roster.id);
     return approvedHours === 0 && !roster.is_locked;
   };
@@ -224,7 +260,7 @@ export const Roster = () => {
     });
   };
 
-  const handleEdit = (roster: Roster) => {
+  const handleEdit = (roster: RosterEntry) => {
     if (!isRosterEditable(roster)) {
       toast({
         title: "Cannot Edit",

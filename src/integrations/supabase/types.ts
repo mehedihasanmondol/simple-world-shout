@@ -118,6 +118,13 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "bank_transactions_profile_id_fkey"
+            columns: ["profile_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "bank_transactions_project_id_fkey"
             columns: ["project_id"]
             isOneToOne: false
@@ -238,7 +245,15 @@ export type Database = {
           total_hours?: number
           updated_at?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "payroll_profile_id_fkey"
+            columns: ["profile_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       profiles: {
         Row: {
@@ -372,7 +387,7 @@ export type Database = {
           id: string
           is_locked: boolean | null
           notes: string | null
-          profile_id: string | null
+          profile_id: string
           project_id: string
           start_time: string
           status: string | null
@@ -387,7 +402,7 @@ export type Database = {
           id?: string
           is_locked?: boolean | null
           notes?: string | null
-          profile_id?: string | null
+          profile_id: string
           project_id: string
           start_time: string
           status?: string | null
@@ -402,7 +417,7 @@ export type Database = {
           id?: string
           is_locked?: boolean | null
           notes?: string | null
-          profile_id?: string | null
+          profile_id?: string
           project_id?: string
           start_time?: string
           status?: string | null
@@ -482,6 +497,13 @@ export type Database = {
             columns: ["client_id"]
             isOneToOne: false
             referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "working_hours_profile_id_fkey"
+            columns: ["profile_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
             referencedColumns: ["id"]
           },
           {

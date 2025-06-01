@@ -53,7 +53,16 @@ export const WorkingHours = () => {
         .order('created_at', { ascending: false });
 
       if (error) throw error;
-      setWorkingHours(data as WorkingHour[]);
+      
+      // Handle the data safely with proper type checking
+      const workingHoursData = (data || []).map(wh => ({
+        ...wh,
+        profiles: Array.isArray(wh.profiles) ? wh.profiles[0] : wh.profiles,
+        clients: Array.isArray(wh.clients) ? wh.clients[0] : wh.clients,
+        projects: Array.isArray(wh.projects) ? wh.projects[0] : wh.projects
+      }));
+      
+      setWorkingHours(workingHoursData as WorkingHour[]);
     } catch (error) {
       console.error('Error fetching working hours:', error);
       toast({

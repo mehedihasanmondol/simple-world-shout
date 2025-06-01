@@ -1,90 +1,122 @@
 
 import { useState, useEffect } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Users, Building2, Briefcase, Clock, DollarSign, TrendingUp } from "lucide-react";
+import { Users, Briefcase, Clock, DollarSign, Building, FileText } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 
 export const Dashboard = () => {
   const [stats, setStats] = useState({
     totalProfiles: 0,
-    totalClients: 0,
-    totalProjects: 0,
+    activeProjects: 0,
     pendingHours: 0,
     totalRevenue: 0,
-    activeProjects: 0
+    bankAccounts: 0,
+    completedProjects: 0
   });
 
   const [recentActivities, setRecentActivities] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    fetchStats();
-    fetchRecentActivities();
+    fetchDashboardData();
   }, []);
 
-  const fetchStats = async () => {
+  const fetchDashboardData = async () => {
     try {
       // Fetch profiles count
-      const { data: profiles } = await supabase
+      const { data: profiles, error: profilesError } = await supabase
         .from('profiles')
-        .select('id')
+        .select('id, full_name')
         .eq('is_active', true);
 
-      // Fetch clients count
-      const { data: clients } = await supabase
-        .from('clients')
-        .select('id')
-        .eq('status', 'active');
+      if (profilesError) throw profilesError;
 
       // Fetch projects count
-      const { data: projects } = await supabase
+      const { data: projects, error: projectsError } = await supabase
         .from('projects')
         .select('id, status');
 
+      if (projectsError) throw projectsError;
+
       // Fetch pending working hours
-      const { data: pendingHours } = await supabase
+      const { data: workingHours, error: workingHoursError } = await supabase
         .from('working_hours')
-        .select('total_hours')
+        .select(`
+          total_hours,
+          status,
+          profiles!working_hours_profile_id_fkey (id, full_name)
+        `)
         .eq('status', 'pending');
 
-      // Calculate stats
-      const totalPendingHours = pendingHours?.reduce((sum, h) => sum + h.total_hours, 0) || 0;
-      const activeProjectsCount = projects?.filter(p => p.status === 'active').length || 0;
+      if (workingHoursError) throw workingHoursError;
 
-      setStats({
-        totalProfiles: profiles?.length || 0,
-        totalClients: clients?.length || 0,
-        totalProjects: projects?.length || 0,
-        pendingHours: totalPendingHours,
-        totalRevenue: 125000, // Mock data
-        activeProjects: activeProjectsCount
-      });
-    } catch (error) {
-      console.error('Error fetching stats:', error);
-    }
-  };
+      // Fetch bank transactions for revenue
+      const { data: transactions, error: transactionsError } = await supabase
+        .from('bank_transactions')
+        .select('amount, type')
+        .eq('type', 'deposit');
 
-  const fetchRecentActivities = async () => {
-    try {
-      const { data: recentHours } = await supabase
+      if (transactionsError) throw transactionsError;
+
+      // Fetch bank accounts count
+      const { data: bankAccounts, error: bankAccountsError } = await supabase
+        .from('bank_accounts')
+        .select('id');
+
+      if (bankAccountsError) throw bankAccountsError;
+
+      // Fetch recent working hours with profiles for activities
+      const { data: recentHours, error: recentHoursError } = await supabase
         .from('working_hours')
         .select(`
           *,
-          profiles(full_name),
-          projects(name)
+          profiles!working_hours_profile_id_fkey (id, full_name),
+          projects!working_hours_project_id_fkey (id, name)
         `)
         .order('created_at', { ascending: false })
         .limit(5);
 
-      const activities = recentHours?.map(h => ({
-        id: h.id,
-        description: `${h.profiles?.full_name || 'Unknown'} logged ${h.total_hours}h for ${h.projects?.name || 'Unknown Project'}`,
-        time: new Date(h.created_at).toLocaleDateString(),
-        status: h.status
-      })) || [];
+      if (recentHoursError) throw recentHoursError;
+
+      // Calculate stats
+      const totalProfiles = profiles?.length || 0;
+      const activeProjects = projects?.filter(p => p.status === 'active').length || 0;
+      const completedProjects = projects?.filter(p => p.status === 'completed').length || 0;
+      
+      // Handle working hours data safely
+      const pendingHours = (workingHours || []).reduce((sum, wh) => sum + wh.total_hours, 0);
+      
+      const totalRevenue = transactions?.reduce((sum, t) => sum + t.amount, 0) || 0;
+      const totalBankAccounts = bankAccounts?.length || 0;
+
+      // Format recent activities with safe data handling
+      const activities = (recentHours || []).map(wh => {
+        const profileName = wh.profiles?.full_name || 'Unknown User';
+        const projectName = wh.projects?.name || 'Unknown Project';
+        
+        return {
+          type: 'hours',
+          description: `${profileName} logged ${wh.total_hours}h for ${projectName}`,
+          time: new Date(wh.created_at).toLocaleDateString(),
+          status: wh.status
+        };
+      });
+
+      setStats({
+        totalProfiles,
+        activeProjects,
+        pendingHours,
+        totalRevenue,
+        bankAccounts: totalBankAccounts,
+        completedProjects
+      });
 
       setRecentActivities(activities);
+
     } catch (error) {
-      console.error('Error fetching recent activities:', error);
+      console.error('Error fetching dashboard data:', error);
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -93,58 +125,51 @@ export const Dashboard = () => {
       title: "Total Profiles", 
       value: stats.totalProfiles.toString(), 
       icon: Users, 
-      color: "text-blue-600",
-      subtitle: "Active team members"
-    },
-    { 
-      title: "Active Clients", 
-      value: stats.totalClients.toString(), 
-      icon: Building2, 
-      color: "text-green-600",
-      subtitle: "Current partnerships"
+      color: "text-blue-600" 
     },
     { 
       title: "Active Projects", 
       value: stats.activeProjects.toString(), 
       icon: Briefcase, 
-      color: "text-purple-600",
-      subtitle: "Ongoing work"
+      color: "text-green-600" 
     },
     { 
       title: "Pending Hours", 
       value: `${stats.pendingHours}h`, 
       icon: Clock, 
-      color: "text-orange-600",
-      subtitle: "Awaiting approval"
+      color: "text-orange-600" 
     },
     { 
-      title: "Revenue", 
+      title: "Total Revenue", 
       value: `$${stats.totalRevenue.toLocaleString()}`, 
       icon: DollarSign, 
-      color: "text-emerald-600",
-      subtitle: "This month"
+      color: "text-emerald-600" 
     },
     { 
-      title: "Total Projects", 
-      value: stats.totalProjects.toString(), 
-      icon: TrendingUp, 
-      color: "text-indigo-600",
-      subtitle: "All time"
+      title: "Bank Accounts", 
+      value: stats.bankAccounts.toString(), 
+      icon: Building, 
+      color: "text-purple-600" 
     },
+    { 
+      title: "Completed Projects", 
+      value: stats.completedProjects.toString(), 
+      icon: FileText, 
+      color: "text-gray-600" 
+    }
   ];
+
+  if (loading) {
+    return <div className="flex justify-center items-center h-64">Loading...</div>;
+  }
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-3xl font-bold text-gray-900">Dashboard</h1>
-          <p className="text-gray-600">Overview of your business operations</p>
-        </div>
-        <div className="text-sm text-gray-600">
-          Last updated: {new Date().toLocaleDateString()}
-        </div>
+      <div>
+        <h1 className="text-3xl font-bold text-gray-900">Dashboard</h1>
+        <p className="text-gray-600">Welcome to your business management overview</p>
       </div>
-
+      
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
         {dashboardStats.map((stat) => {
           const Icon = stat.icon;
@@ -158,61 +183,42 @@ export const Dashboard = () => {
               </CardHeader>
               <CardContent>
                 <div className={`text-2xl font-bold ${stat.color}`}>{stat.value}</div>
-                <p className="text-xs text-muted-foreground">{stat.subtitle}</p>
               </CardContent>
             </Card>
           );
         })}
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <Card>
-          <CardHeader>
-            <CardTitle>Recent Activity</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-4">
-              {recentActivities.map((activity) => (
-                <div key={activity.id} className="flex items-center space-x-3">
-                  <div className={`w-2 h-2 ${
-                    activity.status === 'approved' ? 'bg-green-500' :
-                    activity.status === 'pending' ? 'bg-yellow-500' : 'bg-gray-500'
-                  } rounded-full`}></div>
-                  <div className="flex-1">
-                    <span className="text-sm">{activity.description}</span>
-                    <div className="text-xs text-gray-500">{activity.time}</div>
+      <Card>
+        <CardHeader>
+          <CardTitle>Recent Activity</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="space-y-4">
+            {recentActivities.map((activity, index) => (
+              <div key={index} className="flex items-center space-x-3">
+                <div className="w-2 h-2 bg-blue-500 rounded-full"></div>
+                <div className="flex-1">
+                  <span className="text-sm">{activity.description}</span>
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs text-gray-500">{activity.time}</span>
+                    <span className={`text-xs px-2 py-1 rounded ${
+                      activity.status === 'approved' ? 'bg-green-100 text-green-800' :
+                      activity.status === 'pending' ? 'bg-yellow-100 text-yellow-800' :
+                      'bg-gray-100 text-gray-800'
+                    }`}>
+                      {activity.status}
+                    </span>
                   </div>
                 </div>
-              ))}
-              {recentActivities.length === 0 && (
-                <p className="text-sm text-gray-500 text-center py-4">No recent activity</p>
-              )}
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader>
-            <CardTitle>Quick Actions</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-3">
-              <button className="w-full text-left p-3 bg-blue-50 hover:bg-blue-100 rounded-lg transition-colors">
-                <div className="font-medium text-blue-800">Add New Client</div>
-                <div className="text-sm text-blue-600">Create a new client profile</div>
-              </button>
-              <button className="w-full text-left p-3 bg-green-50 hover:bg-green-100 rounded-lg transition-colors">
-                <div className="font-medium text-green-800">Start New Project</div>
-                <div className="text-sm text-green-600">Begin a new project for existing clients</div>
-              </button>
-              <button className="w-full text-left p-3 bg-purple-50 hover:bg-purple-100 rounded-lg transition-colors">
-                <div className="font-medium text-purple-800">Generate Report</div>
-                <div className="text-sm text-purple-600">Create financial or activity reports</div>
-              </button>
-            </div>
-          </CardContent>
-        </Card>
-      </div>
+              </div>
+            ))}
+            {recentActivities.length === 0 && (
+              <p className="text-sm text-gray-500 text-center py-4">No recent activity</p>
+            )}
+          </div>
+        </CardContent>
+      </Card>
     </div>
   );
 };
