@@ -29,7 +29,7 @@ export const Dashboard = () => {
 
   const fetchDashboardStats = async () => {
     try {
-      // Fetch profiles count
+      // Fetch active profiles count
       const { data: profiles } = await supabase
         .from('profiles')
         .select('id')
@@ -181,13 +181,13 @@ export const Dashboard = () => {
         .gte('date', weekStart.toISOString().split('T')[0]);
 
       const employeeHours = weeklyHours?.reduce((acc: any, curr) => {
-        const employeeId = curr.profiles?.id;
-        const employeeName = curr.profiles?.full_name;
-        if (employeeId && employeeName) {
-          if (!acc[employeeId]) {
-            acc[employeeId] = { name: employeeName, hours: 0 };
+        const profileId = curr.profiles?.id;
+        const profileName = curr.profiles?.full_name;
+        if (profileId && profileName) {
+          if (!acc[profileId]) {
+            acc[profileId] = { name: profileName, hours: 0 };
           }
-          acc[employeeId].hours += curr.total_hours;
+          acc[profileId].hours += curr.total_hours;
         }
         return acc;
       }, {});

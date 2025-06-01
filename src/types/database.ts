@@ -1,13 +1,10 @@
 
 export interface Profile {
   id: string;
-  email: string | null;
   full_name: string | null;
-  avatar_url: string | null;
   role: 'admin' | 'employee' | 'accountant' | 'operation' | 'sales_manager';
+  avatar_url: string | null;
   is_active: boolean;
-  phone: string | null;
-  hourly_rate: number;
   created_at: string;
   updated_at: string;
 }
@@ -39,7 +36,7 @@ export interface Project {
 
 export interface WorkingHour {
   id: string;
-  employee_id: string;
+  profile_id: string;
   client_id: string;
   project_id: string;
   date: string;
@@ -65,7 +62,7 @@ export interface BankTransaction {
   updated_at: string;
   client_id?: string;
   project_id?: string;
-  employee_id?: string;
+  profile_id?: string;
   clients?: Client;
   projects?: Project;
   profiles?: Profile;
@@ -73,7 +70,7 @@ export interface BankTransaction {
 
 export interface Payroll {
   id: string;
-  employee_id: string;
+  profile_id: string;
   pay_period_start: string;
   pay_period_end: string;
   total_hours: number;
