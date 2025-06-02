@@ -55,6 +55,13 @@ export interface WorkingHour {
   roster_id?: string;
   created_at: string;
   updated_at: string;
+  sign_in_time?: string;
+  sign_out_time?: string;
+  actual_hours?: number;
+  overtime_hours?: number;
+  hourly_rate?: number;
+  payable_amount?: number;
+  notes?: string;
   profiles?: Profile;
   clients?: Client;
   projects?: Project;
@@ -79,7 +86,7 @@ export interface BankTransaction {
   description: string;
   amount: number;
   type: 'deposit' | 'withdrawal';
-  category: string;
+  category: 'income' | 'expense' | 'transfer' | 'salary' | 'equipment' | 'materials' | 'travel' | 'office' | 'utilities' | 'marketing' | 'other';
   date: string;
   created_at: string;
   updated_at: string;
@@ -91,6 +98,14 @@ export interface BankTransaction {
   projects?: Project;
   profiles?: Profile;
   bank_accounts?: BankAccount;
+}
+
+export interface RosterProfile {
+  id: string;
+  roster_id: string;
+  profile_id: string;
+  created_at: string;
+  profiles?: Profile;
 }
 
 export interface Roster {
@@ -107,9 +122,15 @@ export interface Roster {
   is_locked: boolean;
   created_at: string;
   updated_at: string;
+  name?: string;
+  expected_profiles?: number;
+  per_hour_rate?: number;
+  is_editable?: boolean;
+  end_date?: string;
   profiles?: Profile;
   clients?: Client;
   projects?: Project;
+  roster_profiles?: RosterProfile[];
 }
 
 export interface Payroll {
@@ -125,11 +146,39 @@ export interface Payroll {
   status: 'pending' | 'approved' | 'paid';
   created_at: string;
   updated_at: string;
+  bank_account_id?: string;
   profiles?: Profile;
+  bank_accounts?: BankAccount;
 }
 
 export interface RolePermission {
   id: string;
   role: 'admin' | 'employee' | 'accountant' | 'operation' | 'sales_manager';
   permission: string;
+}
+
+export interface Notification {
+  id: string;
+  title: string;
+  message: string;
+  type: string;
+  recipient_profile_id: string;
+  sender_profile_id?: string;
+  related_id?: string;
+  action_type: 'approve' | 'confirm' | 'grant' | 'cancel' | 'reject' | 'none';
+  action_data?: any;
+  is_read: boolean;
+  is_actioned: boolean;
+  priority: 'low' | 'medium' | 'high';
+  created_at: string;
+  read_at?: string;
+  actioned_at?: string;
+}
+
+export interface NotificationPermission {
+  id: string;
+  profile_id: string;
+  can_create_notifications: boolean;
+  can_create_bulk_notifications: boolean;
+  created_at: string;
 }
