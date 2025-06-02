@@ -28,12 +28,13 @@ export const PayrollComponent = () => {
         .from('payroll')
         .select(`
           *,
-          profiles!payroll_profile_id_fkey (id, full_name, hourly_rate)
+          profiles!payroll_profile_id_fkey (id, full_name, email, role, avatar_url, is_active, phone, employment_type, hourly_rate, salary, tax_file_number, start_date, created_at, updated_at),
+          bank_accounts (id, profile_id, bank_name, account_number, bsb_code, swift_code, account_holder_name, opening_balance, is_primary, created_at, updated_at)
         `)
         .order('created_at', { ascending: false });
 
       if (error) throw error;
-      setPayrolls((data || []) as PayrollType[]);
+      setPayrolls(data as PayrollType[]);
     } catch (error) {
       console.error('Error fetching payrolls:', error);
       toast({
@@ -150,10 +151,64 @@ export const PayrollComponent = () => {
           </div>
         </CardHeader>
         <CardContent>
-          <div className="text-center py-8 text-gray-500">
-            <Calculator className="h-12 w-12 mx-auto mb-4 text-gray-300" />
-            <p>Payroll records will be displayed here</p>
-            <p className="text-sm">Create payroll entries to get started</p>
+          <div className="overflow-x-auto">
+            <table className="w-full">
+              <thead>
+                <tr className="border-b border-gray-200">
+                  <th className="text-left py-3 px-4 font-medium text-gray-600">Employee</th>
+                  <th className="text-left py-3 px-4 font-medium text-gray-600">Pay Period</th>
+                  <th className="text-left py-3 px-4 font-medium text-gray-600">Hours</th>
+                  <th className="text-left py-3 px-4 font-medium text-gray-600">Gross Pay</th>
+                  <th className="text-left py-3 px-4 font-medium text-gray-600">Deductions</th>
+                  <th className="text-left py-3 px-4 font-medium text-gray-600">Net Pay</th>
+                  <th className="text-left py-3 px-4 font-medium text-gray-600">Status</th>
+                </tr>
+              </thead>
+              <tbody>
+                {filteredPayrolls.map((payroll) => (
+                  <tr key={payroll.id} className="border-b border-gray-100 hover:bg-gray-50">
+                    <td className="py-3 px-4 text-gray-900">
+                      {payroll.profiles?.full_name || 'Unknown'}
+                    </td>
+                    <td className="py-3 px-4 text-gray-600">
+                      {new Date(payroll.pay_period_start).toLocaleDateString()} - {new Date(payroll.pay_period_end).toLocaleDateString()}
+                    </td>
+                    <td className="py-3 px-4 text-gray-600">
+                      {payroll.total_hours.toFixed(1)}
+                    </td>
+                    <td className="py-3 px-4 text-gray-900 font-medium">
+                      ${payroll.gross_pay.toFixed(2)}
+                    </td>
+                    <td className="py-3 px-4 text-red-600">
+                      ${payroll.deductions.toFixed(2)}
+                    </td>
+                    <td className="py-3 px-4 text-green-600 font-bold">
+                      ${payroll.net_pay.toFixed(2)}
+                    </td>
+                    <td className="py-3 px-4">
+                      <span className={`px-2 py-1 rounded-full text-xs font-medium ${
+                        payroll.status === 'paid' 
+                          ? 'bg-green-100 text-green-800' 
+                          : payroll.status === 'approved'
+                          ? 'bg-blue-100 text-blue-800'
+                          : 'bg-yellow-100 text-yellow-800'
+                      }`}>
+                        {payroll.status}
+                      </span>
+                    </td>
+                  </tr>
+                ))}
+                {filteredPayrolls.length === 0 && (
+                  <tr>
+                    <td colSpan={7} className="text-center py-8 text-gray-500">
+                      <Calculator className="h-12 w-12 mx-auto mb-4 text-gray-300" />
+                      <p>Payroll records will be displayed here</p>
+                      <p className="text-sm">Create payroll entries to get started</p>
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
           </div>
         </CardContent>
       </Card>
