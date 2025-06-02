@@ -10,7 +10,6 @@ import { Plus, Zap, Users, Play } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { BulkPayroll, Profile } from "@/types/database";
 import { useToast } from "@/hooks/use-toast";
-import { MultipleProfileSelector } from "@/components/common/MultipleProfileSelector";
 
 interface BulkPayrollManagementProps {
   bulkPayrolls: BulkPayroll[];
@@ -248,11 +247,30 @@ export const BulkPayrollManagement = ({ bulkPayrolls, profiles, onRefresh }: Bul
 
                 <div>
                   <Label>Select Employees *</Label>
-                  <MultipleProfileSelector
-                    profiles={profiles}
-                    selectedProfiles={selectedProfiles}
-                    onSelectionChange={setSelectedProfiles}
-                  />
+                  <div className="border rounded-md p-4 max-h-48 overflow-y-auto">
+                    <div className="space-y-2">
+                      {profiles.map((profile) => (
+                        <label key={profile.id} className="flex items-center space-x-2">
+                          <input
+                            type="checkbox"
+                            checked={selectedProfiles.includes(profile.id)}
+                            onChange={(e) => {
+                              if (e.target.checked) {
+                                setSelectedProfiles([...selectedProfiles, profile.id]);
+                              } else {
+                                setSelectedProfiles(selectedProfiles.filter(id => id !== profile.id));
+                              }
+                            }}
+                            className="rounded"
+                          />
+                          <span className="text-sm">{profile.full_name}</span>
+                        </label>
+                      ))}
+                    </div>
+                  </div>
+                  <p className="text-sm text-gray-500 mt-1">
+                    Selected: {selectedProfiles.length} employees
+                  </p>
                 </div>
 
                 <Button type="submit" disabled={loading} className="w-full">
