@@ -33,7 +33,7 @@ export const PayrollComponent = () => {
         .order('created_at', { ascending: false });
 
       if (error) throw error;
-      setPayrolls(data || []);
+      setPayrolls((data || []) as PayrollType[]);
     } catch (error) {
       console.error('Error fetching payrolls:', error);
       toast({
@@ -69,7 +69,7 @@ export const PayrollComponent = () => {
         .eq('status', 'approved');
 
       if (error) throw error;
-      setWorkingHours(data || []);
+      setWorkingHours((data || []) as WorkingHour[]);
     } catch (error) {
       console.error('Error fetching working hours:', error);
     }
