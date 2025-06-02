@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -29,10 +28,10 @@ export const BankBalance = () => {
     project_id: "",
     profile_id: "",
     bank_account_id: "",
-    description: "",
     amount: 0,
-    type: "deposit" as "deposit" | "withdrawal",
     category: "other" as "income" | "expense" | "transfer" | "salary" | "equipment" | "materials" | "travel" | "office" | "utilities" | "marketing" | "other",
+    description: "",
+    type: "deposit" as "deposit" | "withdrawal",
     date: new Date().toISOString().split('T')[0]
   });
 
@@ -65,10 +64,10 @@ export const BankBalance = () => {
         project_id: editingTransaction.project_id || "",
         profile_id: editingTransaction.profile_id || "",
         bank_account_id: editingTransaction.bank_account_id || "",
-        description: editingTransaction.description,
         amount: editingTransaction.amount,
-        type: editingTransaction.type,
         category: editingTransaction.category,
+        description: editingTransaction.description,
+        type: editingTransaction.type,
         date: editingTransaction.date
       });
     } else {
@@ -77,10 +76,10 @@ export const BankBalance = () => {
         project_id: "",
         profile_id: "",
         bank_account_id: "",
-        description: "",
         amount: 0,
-        type: "deposit",
         category: "other",
+        description: "",
+        type: "deposit",
         date: new Date().toISOString().split('T')[0]
       });
     }
@@ -286,7 +285,7 @@ export const BankBalance = () => {
             <form onSubmit={handleSubmit} className="space-y-4">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
-                  <Label htmlFor="client_id">Client (Optional)</Label>
+                  <Label htmlFor="client_id">Client</Label>
                   <Select value={formData.client_id} onValueChange={(value) => setFormData({ ...formData, client_id: value })}>
                     <SelectTrigger>
                       <SelectValue placeholder="Select client" />
@@ -303,7 +302,7 @@ export const BankBalance = () => {
                 </div>
 
                 <div>
-                  <Label htmlFor="project_id">Project (Optional)</Label>
+                  <Label htmlFor="project_id">Project</Label>
                   <Select value={formData.project_id} onValueChange={(value) => setFormData({ ...formData, project_id: value })}>
                     <SelectTrigger>
                       <SelectValue placeholder="Select project" />
@@ -320,7 +319,7 @@ export const BankBalance = () => {
                 </div>
 
                 <div>
-                  <Label htmlFor="profile_id">Profile (Optional)</Label>
+                  <Label htmlFor="profile_id">Profile</Label>
                   <Select value={formData.profile_id} onValueChange={(value) => setFormData({ ...formData, profile_id: value })}>
                     <SelectTrigger>
                       <SelectValue placeholder="Select profile" />
@@ -365,7 +364,7 @@ export const BankBalance = () => {
                 </div>
 
                 <div>
-                  <Label htmlFor="category">Category (Optional)</Label>
+                  <Label htmlFor="category">Category</Label>
                   <Select value={formData.category} onValueChange={(value) => setFormData({ ...formData, category: value as typeof formData.category })}>
                     <SelectTrigger>
                       <SelectValue placeholder="Select category" />
@@ -406,7 +405,7 @@ export const BankBalance = () => {
               </div>
 
               <div>
-                <Label htmlFor="description">Description (Optional)</Label>
+                <Label htmlFor="description">Description</Label>
                 <Input
                   id="description"
                   value={formData.description}
