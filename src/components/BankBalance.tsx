@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -27,6 +26,7 @@ export const BankBalance = () => {
   const [isWithdrawDialogOpen, setIsWithdrawDialogOpen] = useState(false);
   const [isBankDialogOpen, setIsBankDialogOpen] = useState(false);
   const [editingTransaction, setEditingTransaction] = useState<BankTransaction | null>(null);
+  const [editingBankAccount, setEditingBankAccount] = useState<BankAccount | null>(null);
   const { toast } = useToast();
 
   const categoryOptions = [
@@ -205,8 +205,8 @@ export const BankBalance = () => {
         type,
         category: quickTransactionData.category || "other" as "other",
         profile_id: quickTransactionData.profile_id || null,
-        client_id: quickTransactionData.client_id || null,
-        project_id: quickTransactionData.project_id || null
+        client_id: quickTransactionData.client_id === "no-client" ? null : quickTransactionData.client_id || null,
+        project_id: quickTransactionData.project_id === "no-project" ? null : quickTransactionData.project_id || null
       };
 
       if (editingTransaction) {
@@ -251,25 +251,80 @@ export const BankBalance = () => {
     setLoading(true);
 
     try {
-      const { error } = await supabase
-        .from('bank_accounts')
-        .insert([bankFormData]);
+      if (editingBankAccount) {
+        const { error } = await supabase
+          .from('bank_accounts')
+          .update(bankFormData)
+          .eq('id', editingBankAccount.id);
 
-      if (error) throw error;
-      toast({ title: "Success", description: "Bank account added successfully" });
+        if (error) throw error;
+        toast({ title: "Success", description: "Bank account updated successfully" });
+      } else {
+        const { error } = await supabase
+          .from('bank_accounts')
+          .insert([bankFormData]);
+
+        if (error) throw error;
+        toast({ title: "Success", description: "Bank account added successfully" });
+      }
       
       setIsBankDialogOpen(false);
       resetBankForm();
       fetchBankAccounts();
     } catch (error) {
-      console.error('Error adding bank account:', error);
+      console.error('Error saving bank account:', error);
       toast({
         title: "Error",
-        description: "Failed to add bank account",
+        description: "Failed to save bank account",
         variant: "destructive"
       });
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleEditBankAccount = (account: BankAccount) => {
+    setEditingBankAccount(account);
+    setBankFormData({
+      bank_name: account.bank_name,
+      account_number: account.account_number,
+      bsb_code: account.bsb_code || "",
+      swift_code: account.swift_code || "",
+      account_holder_name: account.account_holder_name,
+      opening_balance: account.opening_balance,
+      is_primary: account.is_primary
+    });
+    setIsBankDialogOpen(true);
+  };
+
+  const handleDeleteBankAccount = async (accountId: string) => {
+    if (!confirm('Are you sure you want to delete this bank account? This will also delete all associated transactions.')) return;
+
+    try {
+      // First delete all transactions for this bank account
+      await supabase
+        .from('bank_transactions')
+        .delete()
+        .eq('bank_account_id', accountId);
+
+      // Then delete the bank account
+      const { error } = await supabase
+        .from('bank_accounts')
+        .delete()
+        .eq('id', accountId);
+
+      if (error) throw error;
+      
+      toast({ title: "Success", description: "Bank account deleted successfully" });
+      fetchBankAccounts();
+      fetchTransactions();
+    } catch (error: any) {
+      console.error('Error deleting bank account:', error);
+      toast({
+        title: "Error",
+        description: error.message || "Failed to delete bank account",
+        variant: "destructive"
+      });
     }
   };
 
@@ -339,6 +394,7 @@ export const BankBalance = () => {
       opening_balance: 0,
       is_primary: false
     });
+    setEditingBankAccount(null);
   };
 
   const calculateBankBalance = (bankAccountId: string) => {
@@ -606,7 +662,7 @@ export const BankBalance = () => {
             </DialogContent>
           </Dialog>
 
-          <Dialog open={isBankDialogOpen} onOpenChange={setIsBankDialogOpen}>
+          <Dialog open={isBankDialogOpen} onOpenChange={(open) => { setIsBankDialogOpen(open); if (!open) resetBankForm(); }}>
             <DialogTrigger asChild>
               <Button variant="outline" className="flex items-center gap-2">
                 <Plus className="h-4 w-4" />
@@ -615,7 +671,7 @@ export const BankBalance = () => {
             </DialogTrigger>
             <DialogContent className="max-w-md">
               <DialogHeader>
-                <DialogTitle>Add Bank Account</DialogTitle>
+                <DialogTitle>{editingBankAccount ? 'Edit Bank Account' : 'Add Bank Account'}</DialogTitle>
               </DialogHeader>
               <form onSubmit={handleBankSubmit} className="space-y-4">
                 <div>
@@ -679,7 +735,7 @@ export const BankBalance = () => {
                 </div>
 
                 <Button type="submit" disabled={loading} className="w-full">
-                  {loading ? "Adding..." : "Add Bank Account"}
+                  {loading ? "Saving..." : editingBankAccount ? "Update Bank Account" : "Add Bank Account"}
                 </Button>
               </form>
             </DialogContent>
@@ -767,15 +823,35 @@ export const BankBalance = () => {
                             <p className="text-xs text-gray-500">BSB: {account.bsb_code}</p>
                           )}
                         </div>
-                        <div className="text-right">
-                          <div className="text-xl font-bold">
-                            ${currentBalance.toFixed(2)}
+                        <div className="flex items-center gap-4">
+                          <div className="text-right">
+                            <div className="text-xl font-bold">
+                              ${currentBalance.toFixed(2)}
+                            </div>
+                            {account.is_primary && (
+                              <Badge variant="default" className="mt-1">
+                                Primary
+                              </Badge>
+                            )}
                           </div>
-                          {account.is_primary && (
-                            <Badge variant="default" className="mt-1">
-                              Primary
-                            </Badge>
-                          )}
+                          <div className="flex gap-2">
+                            <Button 
+                              variant="ghost" 
+                              size="sm" 
+                              onClick={() => handleEditBankAccount(account)}
+                              className="text-blue-600 hover:text-blue-700"
+                            >
+                              <Edit className="h-4 w-4" />
+                            </Button>
+                            <Button 
+                              variant="ghost" 
+                              size="sm" 
+                              onClick={() => handleDeleteBankAccount(account.id)}
+                              className="text-red-600 hover:text-red-700"
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
+                          </div>
                         </div>
                       </div>
                     </div>
