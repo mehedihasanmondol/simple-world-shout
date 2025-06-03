@@ -1,3 +1,4 @@
+
 import { useState, useEffect } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -6,7 +7,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
-import { Plus, TrendingUp, TrendingDown, Building, DollarSign, Minus, Edit, Trash2 } from "lucide-react";
+import { Plus, TrendingUp, TrendingDown, Building, DollarSign, Minus, Edit, Trash2, Search } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { BankAccount, BankTransaction, Profile, Client, Project } from "@/types/database";
 import { useToast } from "@/hooks/use-toast";
@@ -16,6 +17,8 @@ export const BankBalance = () => {
   const [bankAccounts, setBankAccounts] = useState<BankAccount[]>([]);
   const [orphanBankAccounts, setOrphanBankAccounts] = useState<BankAccount[]>([]);
   const [transactions, setTransactions] = useState<BankTransaction[]>([]);
+  const [filteredTransactions, setFilteredTransactions] = useState<BankTransaction[]>([]);
+  const [searchTerm, setSearchTerm] = useState("");
   const [profiles, setProfiles] = useState<Profile[]>([]);
   const [clients, setClients] = useState<Client[]>([]);
   const [projects, setProjects] = useState<Project[]>([]);
@@ -44,7 +47,7 @@ export const BankBalance = () => {
     bank_account_id: "",
     description: "",
     amount: 0,
-    category: "income" as "income" | "expense" | "transfer" | "salary" | "equipment" | "materials" | "travel" | "office" | "utilities" | "marketing" | "other",
+    category: "" as "" | "income" | "expense" | "transfer" | "salary" | "equipment" | "materials" | "travel" | "office" | "utilities" | "marketing" | "other",
     date: new Date().toISOString().split('T')[0],
     profile_id: "",
     client_id: "",
@@ -64,6 +67,29 @@ export const BankBalance = () => {
   useEffect(() => {
     fetchAllData();
   }, []);
+
+  useEffect(() => {
+    filterTransactions();
+  }, [searchTerm, transactions]);
+
+  const filterTransactions = () => {
+    if (!searchTerm) {
+      setFilteredTransactions(transactions);
+      return;
+    }
+
+    const filtered = transactions.filter(transaction => 
+      transaction.description.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      transaction.category.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      transaction.clients?.company?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      transaction.projects?.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      transaction.profiles?.full_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      transaction.amount.toString().includes(searchTerm) ||
+      transaction.type.toLowerCase().includes(searchTerm.toLowerCase())
+    );
+
+    setFilteredTransactions(filtered);
+  };
 
   const fetchAllData = async () => {
     try {
@@ -177,17 +203,28 @@ export const BankBalance = () => {
       const transactionData = {
         ...quickTransactionData,
         type,
+        category: quickTransactionData.category || "other" as "other",
         profile_id: quickTransactionData.profile_id || null,
         client_id: quickTransactionData.client_id || null,
         project_id: quickTransactionData.project_id || null
       };
 
-      const { error } = await supabase
-        .from('bank_transactions')
-        .insert([transactionData]);
+      if (editingTransaction) {
+        const { error } = await supabase
+          .from('bank_transactions')
+          .update(transactionData)
+          .eq('id', editingTransaction.id);
 
-      if (error) throw error;
-      toast({ title: "Success", description: `${type === 'deposit' ? 'Deposit' : 'Withdrawal'} added successfully` });
+        if (error) throw error;
+        toast({ title: "Success", description: `${type === 'deposit' ? 'Deposit' : 'Withdrawal'} updated successfully` });
+      } else {
+        const { error } = await supabase
+          .from('bank_transactions')
+          .insert([transactionData]);
+
+        if (error) throw error;
+        toast({ title: "Success", description: `${type === 'deposit' ? 'Deposit' : 'Withdrawal'} added successfully` });
+      }
       
       if (type === 'deposit') {
         setIsDepositDialogOpen(false);
@@ -201,7 +238,7 @@ export const BankBalance = () => {
       console.error('Error adding quick transaction:', error);
       toast({
         title: "Error",
-        description: `Failed to add ${type}`,
+        description: `Failed to ${editingTransaction ? 'update' : 'add'} ${type}`,
         variant: "destructive"
       });
     } finally {
@@ -242,7 +279,7 @@ export const BankBalance = () => {
       bank_account_id: transaction.bank_account_id || "",
       description: transaction.description,
       amount: transaction.amount,
-      category: transaction.category,
+      category: transaction.category as typeof quickTransactionData.category,
       date: transaction.date,
       profile_id: transaction.profile_id || "",
       client_id: transaction.client_id || "",
@@ -283,7 +320,7 @@ export const BankBalance = () => {
       bank_account_id: "",
       description: "",
       amount: 0,
-      category: "income",
+      category: "",
       date: new Date().toISOString().split('T')[0],
       profile_id: "",
       client_id: "",
@@ -370,7 +407,7 @@ export const BankBalance = () => {
                       <SelectValue placeholder="Select client (optional)" />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="none">No Client</SelectItem>
+                      <SelectItem value="no-client">No Client</SelectItem>
                       {clients.map((client) => (
                         <SelectItem key={client.id} value={client.id}>
                           {client.company}
@@ -387,8 +424,8 @@ export const BankBalance = () => {
                       <SelectValue placeholder="Select project (optional)" />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="none">No Project</SelectItem>
-                      {projects.filter(p => !quickTransactionData.client_id || quickTransactionData.client_id === "none" || p.client_id === quickTransactionData.client_id).map((project) => (
+                      <SelectItem value="no-project">No Project</SelectItem>
+                      {projects.filter(p => !quickTransactionData.client_id || quickTransactionData.client_id === "no-client" || p.client_id === quickTransactionData.client_id).map((project) => (
                         <SelectItem key={project.id} value={project.id}>
                           {project.name}
                         </SelectItem>
@@ -429,12 +466,13 @@ export const BankBalance = () => {
                 </div>
 
                 <div>
-                  <Label htmlFor="deposit_category">Category</Label>
+                  <Label htmlFor="deposit_category">Category (Optional)</Label>
                   <Select value={quickTransactionData.category} onValueChange={(value) => setQuickTransactionData({ ...quickTransactionData, category: value as typeof quickTransactionData.category })}>
                     <SelectTrigger>
-                      <SelectValue />
+                      <SelectValue placeholder="Select category (optional)" />
                     </SelectTrigger>
                     <SelectContent>
+                      <SelectItem value="no-category">No Category</SelectItem>
                       {categoryOptions.map((option) => (
                         <SelectItem key={option.value} value={option.value}>
                           {option.label}
@@ -486,7 +524,7 @@ export const BankBalance = () => {
                       <SelectValue placeholder="Select client (optional)" />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="none">No Client</SelectItem>
+                      <SelectItem value="no-client">No Client</SelectItem>
                       {clients.map((client) => (
                         <SelectItem key={client.id} value={client.id}>
                           {client.company}
@@ -503,8 +541,8 @@ export const BankBalance = () => {
                       <SelectValue placeholder="Select project (optional)" />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="none">No Project</SelectItem>
-                      {projects.filter(p => !quickTransactionData.client_id || quickTransactionData.client_id === "none" || p.client_id === quickTransactionData.client_id).map((project) => (
+                      <SelectItem value="no-project">No Project</SelectItem>
+                      {projects.filter(p => !quickTransactionData.client_id || quickTransactionData.client_id === "no-client" || p.client_id === quickTransactionData.client_id).map((project) => (
                         <SelectItem key={project.id} value={project.id}>
                           {project.name}
                         </SelectItem>
@@ -545,12 +583,13 @@ export const BankBalance = () => {
                 </div>
 
                 <div>
-                  <Label htmlFor="withdraw_category">Category</Label>
+                  <Label htmlFor="withdraw_category">Category (Optional)</Label>
                   <Select value={quickTransactionData.category} onValueChange={(value) => setQuickTransactionData({ ...quickTransactionData, category: value as typeof quickTransactionData.category })}>
                     <SelectTrigger>
-                      <SelectValue />
+                      <SelectValue placeholder="Select category (optional)" />
                     </SelectTrigger>
                     <SelectContent>
+                      <SelectItem value="no-category">No Category</SelectItem>
                       {categoryOptions.map((option) => (
                         <SelectItem key={option.value} value={option.value}>
                           {option.label}
@@ -750,11 +789,26 @@ export const BankBalance = () => {
         {/* Recent Transactions */}
         <Card>
           <CardHeader>
-            <CardTitle>Recent Transactions ({transactions.length})</CardTitle>
+            <div className="flex justify-between items-center">
+              <CardTitle>Recent Transactions ({transactions.length})</CardTitle>
+              <div className="flex items-center gap-2">
+                <div className="relative">
+                  <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
+                  <Input
+                    placeholder="Search transactions..."
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)}
+                    className="pl-10 w-64"
+                  />
+                </div>
+              </div>
+            </div>
           </CardHeader>
           <CardContent>
-            {transactions.length === 0 ? (
-              <p className="text-gray-500 text-center py-8">No transactions found. Add your first transaction above.</p>
+            {filteredTransactions.length === 0 ? (
+              <p className="text-gray-500 text-center py-8">
+                {searchTerm ? "No transactions match your search." : "No transactions found. Add your first transaction above."}
+              </p>
             ) : (
               <div className="overflow-x-auto">
                 <table className="w-full">
@@ -771,7 +825,7 @@ export const BankBalance = () => {
                     </tr>
                   </thead>
                   <tbody>
-                    {transactions.map((transaction) => (
+                    {filteredTransactions.map((transaction) => (
                       <tr key={transaction.id} className="border-b border-gray-100 hover:bg-gray-50">
                         <td className="py-3 px-4 text-gray-600">
                           {new Date(transaction.date).toLocaleDateString()}
