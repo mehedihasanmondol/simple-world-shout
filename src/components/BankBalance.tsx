@@ -1,3 +1,4 @@
+
 import { useState, useEffect } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -11,6 +12,8 @@ import { supabase } from "@/integrations/supabase/client";
 import { BankAccount, BankTransaction, Profile, Client, Project } from "@/types/database";
 import { useToast } from "@/hooks/use-toast";
 import { ProfileSelector } from "@/components/common/ProfileSelector";
+import { TransactionTable } from "@/components/bank/TransactionTable";
+import { TransactionForm } from "@/components/bank/TransactionForm";
 
 export const BankBalance = () => {
   const [bankAccounts, setBankAccounts] = useState<BankAccount[]>([]);
@@ -23,14 +26,29 @@ export const BankBalance = () => {
   const [isBankDialogOpen, setIsBankDialogOpen] = useState(false);
   const [isDepositDialogOpen, setIsDepositDialogOpen] = useState(false);
   const [isWithdrawDialogOpen, setIsWithdrawDialogOpen] = useState(false);
+  const [editingTransaction, setEditingTransaction] = useState<BankTransaction | null>(null);
   const { toast } = useToast();
+
+  const categoryOptions = [
+    { value: "income", label: "Income" },
+    { value: "expense", label: "Expense" },
+    { value: "transfer", label: "Transfer" },
+    { value: "salary", label: "Salary" },
+    { value: "equipment", label: "Equipment" },
+    { value: "materials", label: "Materials" },
+    { value: "travel", label: "Travel" },
+    { value: "office", label: "Office" },
+    { value: "utilities", label: "Utilities" },
+    { value: "marketing", label: "Marketing" },
+    { value: "other", label: "Other" }
+  ];
 
   const [transactionFormData, setTransactionFormData] = useState({
     bank_account_id: "",
     description: "",
     amount: 0,
-    type: "deposit",
-    category: "",
+    type: "deposit" as "deposit" | "withdrawal",
+    category: "income" as typeof categoryOptions[0]["value"],
     date: new Date().toISOString().split('T')[0],
     profile_id: "",
     client_id: "",
@@ -41,9 +59,11 @@ export const BankBalance = () => {
     bank_account_id: "",
     description: "",
     amount: 0,
-    category: "",
+    category: "income" as typeof categoryOptions[0]["value"],
     date: new Date().toISOString().split('T')[0],
-    profile_id: ""
+    profile_id: "",
+    client_id: "",
+    project_id: ""
   });
 
   const [bankFormData, setBankFormData] = useState({
@@ -53,7 +73,8 @@ export const BankBalance = () => {
     swift_code: "",
     account_holder_name: "",
     opening_balance: 0,
-    is_primary: false
+    is_primary: false,
+    profile_id: ""
   });
 
   useEffect(() => {
@@ -80,7 +101,10 @@ export const BankBalance = () => {
     try {
       const { data, error } = await supabase
         .from('bank_accounts')
-        .select('*')
+        .select(`
+          *,
+          profiles!bank_accounts_profile_id_fkey (id, full_name)
+        `)
         .order('created_at', { ascending: false });
 
       if (error) throw error;
@@ -96,24 +120,16 @@ export const BankBalance = () => {
         .from('bank_transactions')
         .select(`
           *,
-          clients!bank_transactions_client_id_fkey (id, company),
-          projects!bank_transactions_project_id_fkey (id, name),
-          profiles!bank_transactions_profile_id_fkey (id, full_name),
-          bank_accounts!bank_transactions_bank_account_id_fkey (id, bank_name, account_number)
+          clients (id, company),
+          projects (id, name),
+          profiles (id, full_name),
+          bank_accounts (id, bank_name, account_number)
         `)
-        .order('created_at', { ascending: false });
+        .order('date', { ascending: false })
+        .limit(50);
 
       if (error) throw error;
-      
-      const transactionData = (data || []).map(transaction => ({
-        ...transaction,
-        clients: Array.isArray(transaction.clients) ? transaction.clients[0] : transaction.clients,
-        projects: Array.isArray(transaction.projects) ? transaction.projects[0] : transaction.projects,
-        profiles: Array.isArray(transaction.profiles) ? transaction.profiles[0] : transaction.profiles,
-        bank_accounts: Array.isArray(transaction.bank_accounts) ? transaction.bank_accounts[0] : transaction.bank_accounts
-      }));
-      
-      setTransactions(transactionData as BankTransaction[]);
+      setTransactions(data as BankTransaction[]);
     } catch (error) {
       console.error('Error fetching transactions:', error);
     }
@@ -167,21 +183,39 @@ export const BankBalance = () => {
     setLoading(true);
 
     try {
-      const { error } = await supabase
-        .from('bank_transactions')
-        .insert([transactionFormData]);
+      const transactionData = {
+        ...transactionFormData,
+        client_id: transactionFormData.client_id || null,
+        project_id: transactionFormData.project_id || null,
+        profile_id: transactionFormData.profile_id || null
+      };
 
-      if (error) throw error;
-      toast({ title: "Success", description: "Transaction added successfully" });
+      if (editingTransaction) {
+        const { error } = await supabase
+          .from('bank_transactions')
+          .update(transactionData)
+          .eq('id', editingTransaction.id);
+
+        if (error) throw error;
+        toast({ title: "Success", description: "Transaction updated successfully" });
+      } else {
+        const { error } = await supabase
+          .from('bank_transactions')
+          .insert([transactionData]);
+
+        if (error) throw error;
+        toast({ title: "Success", description: "Transaction added successfully" });
+      }
       
       setIsTransactionDialogOpen(false);
+      setEditingTransaction(null);
       resetTransactionForm();
       fetchTransactions();
     } catch (error) {
-      console.error('Error adding transaction:', error);
+      console.error('Error saving transaction:', error);
       toast({
         title: "Error",
-        description: "Failed to add transaction",
+        description: "Failed to save transaction",
         variant: "destructive"
       });
     } finally {
@@ -196,7 +230,9 @@ export const BankBalance = () => {
       const transactionData = {
         ...quickTransactionData,
         type,
-        profile_id: quickTransactionData.profile_id || null
+        profile_id: quickTransactionData.profile_id || null,
+        client_id: quickTransactionData.client_id || null,
+        project_id: quickTransactionData.project_id || null
       };
 
       const { error } = await supabase
@@ -231,9 +267,14 @@ export const BankBalance = () => {
     setLoading(true);
 
     try {
+      const bankData = {
+        ...bankFormData,
+        profile_id: bankFormData.profile_id || null
+      };
+
       const { error } = await supabase
         .from('bank_accounts')
-        .insert([bankFormData]);
+        .insert([bankData]);
 
       if (error) throw error;
       toast({ title: "Success", description: "Bank account added successfully" });
@@ -253,13 +294,49 @@ export const BankBalance = () => {
     }
   };
 
+  const handleEditTransaction = (transaction: BankTransaction) => {
+    setEditingTransaction(transaction);
+    setTransactionFormData({
+      bank_account_id: transaction.bank_account_id || "",
+      description: transaction.description,
+      amount: transaction.amount,
+      type: transaction.type,
+      category: transaction.category,
+      date: transaction.date,
+      profile_id: transaction.profile_id || "",
+      client_id: transaction.client_id || "",
+      project_id: transaction.project_id || ""
+    });
+    setIsTransactionDialogOpen(true);
+  };
+
+  const handleDeleteTransaction = async (id: string) => {
+    try {
+      const { error } = await supabase
+        .from('bank_transactions')
+        .delete()
+        .eq('id', id);
+
+      if (error) throw error;
+      toast({ title: "Success", description: "Transaction deleted successfully" });
+      fetchTransactions();
+    } catch (error) {
+      console.error('Error deleting transaction:', error);
+      toast({
+        title: "Error",
+        description: "Failed to delete transaction",
+        variant: "destructive"
+      });
+    }
+  };
+
   const resetTransactionForm = () => {
     setTransactionFormData({
       bank_account_id: "",
       description: "",
       amount: 0,
       type: "deposit",
-      category: "",
+      category: "income",
       date: new Date().toISOString().split('T')[0],
       profile_id: "",
       client_id: "",
@@ -272,9 +349,11 @@ export const BankBalance = () => {
       bank_account_id: "",
       description: "",
       amount: 0,
-      category: "",
+      category: "income",
       date: new Date().toISOString().split('T')[0],
-      profile_id: ""
+      profile_id: "",
+      client_id: "",
+      project_id: ""
     });
   };
 
@@ -286,7 +365,8 @@ export const BankBalance = () => {
       swift_code: "",
       account_holder_name: "",
       opening_balance: 0,
-      is_primary: false
+      is_primary: false,
+      profile_id: ""
     });
   };
 
@@ -349,6 +429,40 @@ export const BankBalance = () => {
                   </Select>
                 </div>
 
+                <div>
+                  <Label htmlFor="deposit_client">Client (Optional)</Label>
+                  <Select value={quickTransactionData.client_id} onValueChange={(value) => setQuickTransactionData({ ...quickTransactionData, client_id: value })}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select client" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="">No Client</SelectItem>
+                      {clients.map((client) => (
+                        <SelectItem key={client.id} value={client.id}>
+                          {client.company}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div>
+                  <Label htmlFor="deposit_project">Project (Optional)</Label>
+                  <Select value={quickTransactionData.project_id} onValueChange={(value) => setQuickTransactionData({ ...quickTransactionData, project_id: value })}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select project" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="">No Project</SelectItem>
+                      {projects.filter(p => !quickTransactionData.client_id || p.client_id === quickTransactionData.client_id).map((project) => (
+                        <SelectItem key={project.id} value={project.id}>
+                          {project.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+
                 <ProfileSelector
                   profiles={profiles}
                   selectedProfileId={quickTransactionData.profile_id}
@@ -382,12 +496,18 @@ export const BankBalance = () => {
 
                 <div>
                   <Label htmlFor="deposit_category">Category</Label>
-                  <Input
-                    id="deposit_category"
-                    value={quickTransactionData.category}
-                    onChange={(e) => setQuickTransactionData({ ...quickTransactionData, category: e.target.value })}
-                    required
-                  />
+                  <Select value={quickTransactionData.category} onValueChange={(value) => setQuickTransactionData({ ...quickTransactionData, category: value as typeof quickTransactionData.category })}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select category" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {categoryOptions.map((option) => (
+                        <SelectItem key={option.value} value={option.value}>
+                          {option.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                 </div>
 
                 <Button type="submit" disabled={loading} className="w-full bg-green-600 hover:bg-green-700">
@@ -419,6 +539,40 @@ export const BankBalance = () => {
                       {bankAccounts.map((account) => (
                         <SelectItem key={account.id} value={account.id}>
                           {account.bank_name} - {account.account_number}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div>
+                  <Label htmlFor="withdraw_client">Client (Optional)</Label>
+                  <Select value={quickTransactionData.client_id} onValueChange={(value) => setQuickTransactionData({ ...quickTransactionData, client_id: value })}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select client" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="">No Client</SelectItem>
+                      {clients.map((client) => (
+                        <SelectItem key={client.id} value={client.id}>
+                          {client.company}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div>
+                  <Label htmlFor="withdraw_project">Project (Optional)</Label>
+                  <Select value={quickTransactionData.project_id} onValueChange={(value) => setQuickTransactionData({ ...quickTransactionData, project_id: value })}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select project" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="">No Project</SelectItem>
+                      {projects.filter(p => !quickTransactionData.client_id || p.client_id === quickTransactionData.client_id).map((project) => (
+                        <SelectItem key={project.id} value={project.id}>
+                          {project.name}
                         </SelectItem>
                       ))}
                     </SelectContent>
@@ -458,12 +612,18 @@ export const BankBalance = () => {
 
                 <div>
                   <Label htmlFor="withdraw_category">Category</Label>
-                  <Input
-                    id="withdraw_category"
-                    value={quickTransactionData.category}
-                    onChange={(e) => setQuickTransactionData({ ...quickTransactionData, category: e.target.value })}
-                    required
-                  />
+                  <Select value={quickTransactionData.category} onValueChange={(value) => setQuickTransactionData({ ...quickTransactionData, category: value as typeof quickTransactionData.category })}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select category" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {categoryOptions.map((option) => (
+                        <SelectItem key={option.value} value={option.value}>
+                          {option.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                 </div>
 
                 <Button type="submit" disabled={loading} className="w-full bg-red-600 hover:bg-red-700">
@@ -515,6 +675,15 @@ export const BankBalance = () => {
                   />
                 </div>
 
+                <ProfileSelector
+                  profiles={profiles}
+                  selectedProfileId={bankFormData.profile_id}
+                  onProfileSelect={(profileId) => setBankFormData({ ...bankFormData, profile_id: profileId })}
+                  label="Profile (Optional)"
+                  placeholder="Select profile"
+                  showRoleFilter={true}
+                />
+
                 <div className="grid grid-cols-2 gap-4">
                   <div>
                     <Label htmlFor="bsb_code">BSB Code</Label>
@@ -552,11 +721,33 @@ export const BankBalance = () => {
             </DialogContent>
           </Dialog>
 
-         
+          <Dialog open={isTransactionDialogOpen} onOpenChange={setIsTransactionDialogOpen}>
+            <DialogTrigger asChild>
+              <Button className="flex items-center gap-2">
+                <Plus className="h-4 w-4" />
+                Add Transaction
+              </Button>
+            </DialogTrigger>
+            <DialogContent className="max-w-2xl">
+              <DialogHeader>
+                <DialogTitle>{editingTransaction ? "Edit Transaction" : "Add Transaction"}</DialogTitle>
+              </DialogHeader>
+              <TransactionForm
+                formData={transactionFormData}
+                setFormData={setTransactionFormData}
+                onSubmit={handleTransactionSubmit}
+                bankAccounts={bankAccounts}
+                profiles={profiles}
+                clients={clients}
+                projects={projects}
+                loading={loading}
+                editingTransaction={editingTransaction}
+              />
+            </DialogContent>
+          </Dialog>
         </div>
       </div>
 
-      
       {/* Summary Cards */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
         <Card>
@@ -632,6 +823,9 @@ export const BankBalance = () => {
                         {account.bsb_code && (
                           <p className="text-xs text-gray-500">BSB: {account.bsb_code}</p>
                         )}
+                        {account.profiles && (
+                          <p className="text-xs text-gray-500">Profile: {account.profiles.full_name}</p>
+                        )}
                       </div>
                       <div className="text-right">
                         <div className="text-xl font-bold">
@@ -657,54 +851,11 @@ export const BankBalance = () => {
             <CardTitle>Recent Transactions ({transactions.length})</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="overflow-x-auto">
-              <table className="w-full">
-                <thead>
-                  <tr className="border-b border-gray-200">
-                    <th className="text-left py-3 px-4 font-medium text-gray-600">Date</th>
-                    <th className="text-left py-3 px-4 font-medium text-gray-600">Description</th>
-                    <th className="text-left py-3 px-4 font-medium text-gray-600">Category</th>
-                    <th className="text-left py-3 px-4 font-medium text-gray-600">Type</th>
-                    <th className="text-left py-3 px-4 font-medium text-gray-600">Amount</th>
-                    <th className="text-left py-3 px-4 font-medium text-gray-600">Account</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {transactions.map((transaction) => (
-                    <tr key={transaction.id} className="border-b border-gray-100 hover:bg-gray-50">
-                      <td className="py-3 px-4 text-gray-600">
-                        {new Date(transaction.date).toLocaleDateString()}
-                      </td>
-                      <td className="py-3 px-4">
-                        <div className="font-medium text-gray-900">{transaction.description}</div>
-                        {transaction.clients && (
-                          <div className="text-sm text-gray-600">Client: {transaction.clients.company}</div>
-                        )}
-                        {transaction.projects && (
-                          <div className="text-sm text-gray-600">Project: {transaction.projects.name}</div>
-                        )}
-                      </td>
-                      <td className="py-3 px-4 text-gray-600">{transaction.category}</td>
-                      <td className="py-3 px-4">
-                        <Badge variant={transaction.type === 'deposit' ? 'default' : 'outline'}>
-                          {transaction.type}
-                        </Badge>
-                      </td>
-                      <td className="py-3 px-4">
-                        <span className={`font-medium ${
-                          transaction.type === 'deposit' ? 'text-green-600' : 'text-red-600'
-                        }`}>
-                          {transaction.type === 'deposit' ? '+' : '-'}${transaction.amount.toFixed(2)}
-                        </span>
-                      </td>
-                      <td className="py-3 px-4 text-gray-600">
-                        {transaction.bank_accounts?.bank_name || 'N/A'}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+            <TransactionTable
+              transactions={transactions}
+              onEdit={handleEditTransaction}
+              onDelete={handleDeleteTransaction}
+            />
           </CardContent>
         </Card>
       </div>

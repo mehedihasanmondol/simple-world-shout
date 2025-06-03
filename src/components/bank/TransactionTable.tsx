@@ -1,8 +1,8 @@
 
-import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Edit, Trash2 } from "lucide-react";
 import { BankTransaction } from "@/types/database";
+import { ActionDropdown } from "@/components/ui/action-dropdown";
+import { Edit, Trash2 } from "lucide-react";
 
 interface TransactionTableProps {
   transactions: BankTransaction[];
@@ -11,6 +11,14 @@ interface TransactionTableProps {
 }
 
 export const TransactionTable = ({ transactions, onEdit, onDelete }: TransactionTableProps) => {
+  if (transactions.length === 0) {
+    return (
+      <div className="text-center py-8 text-gray-500">
+        No transactions found. Add your first transaction to get started.
+      </div>
+    );
+  }
+
   return (
     <div className="overflow-x-auto">
       <table className="w-full">
@@ -34,7 +42,7 @@ export const TransactionTable = ({ transactions, onEdit, onDelete }: Transaction
               </td>
               <td className="py-3 px-4 text-gray-900">{transaction.description}</td>
               <td className="py-3 px-4">
-                <Badge variant="outline">{transaction.category}</Badge>
+                <Badge variant="outline" className="capitalize">{transaction.category}</Badge>
               </td>
               <td className="py-3 px-4 text-gray-600">
                 {transaction.clients?.company && (
@@ -45,9 +53,15 @@ export const TransactionTable = ({ transactions, onEdit, onDelete }: Transaction
                     )}
                   </div>
                 )}
+                {!transaction.clients?.company && transaction.projects?.name && (
+                  <div className="text-sm text-gray-500">{transaction.projects.name}</div>
+                )}
+                {!transaction.clients?.company && !transaction.projects?.name && (
+                  <span className="text-gray-400">-</span>
+                )}
               </td>
               <td className="py-3 px-4 text-gray-600">
-                {transaction.profiles?.full_name || 'N/A'}
+                {transaction.profiles?.full_name || '-'}
               </td>
               <td className="py-3 px-4">
                 <span className={`font-medium ${transaction.type === 'deposit' ? 'text-green-600' : 'text-red-600'}`}>
@@ -55,29 +69,26 @@ export const TransactionTable = ({ transactions, onEdit, onDelete }: Transaction
                 </span>
               </td>
               <td className="py-3 px-4">
-                <Badge variant={transaction.type === 'deposit' ? 'default' : 'destructive'}>
+                <Badge variant={transaction.type === 'deposit' ? 'default' : 'destructive'} className="capitalize">
                   {transaction.type}
                 </Badge>
               </td>
               <td className="py-3 px-4">
-                <div className="flex items-center gap-2">
-                  <Button 
-                    variant="ghost" 
-                    size="sm" 
-                    onClick={() => onEdit(transaction)}
-                    className="text-blue-600 hover:text-blue-700"
-                  >
-                    <Edit className="h-4 w-4" />
-                  </Button>
-                  <Button 
-                    variant="ghost" 
-                    size="sm" 
-                    onClick={() => onDelete(transaction.id)}
-                    className="text-red-600 hover:text-red-700"
-                  >
-                    <Trash2 className="h-4 w-4" />
-                  </Button>
-                </div>
+                <ActionDropdown
+                  items={[
+                    {
+                      label: "Edit",
+                      onClick: () => onEdit(transaction),
+                      icon: <Edit className="h-4 w-4" />
+                    },
+                    {
+                      label: "Delete",
+                      onClick: () => onDelete(transaction.id),
+                      icon: <Trash2 className="h-4 w-4" />,
+                      variant: "destructive"
+                    }
+                  ]}
+                />
               </td>
             </tr>
           ))}
