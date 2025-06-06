@@ -1,5 +1,4 @@
-
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { cn } from "@/lib/utils";
 import { 
   LayoutDashboard, 
@@ -22,15 +21,47 @@ interface SidebarProps {
   activeTab: string;
   onTabChange: (tab: string) => void;
   hasPermission: (permission: string) => boolean;
+  onCollapsedChange?: (collapsed: boolean) => void;
 }
 
-export const Sidebar = ({ activeTab, onTabChange, hasPermission }: SidebarProps) => {
+export const Sidebar = ({ activeTab, onTabChange, hasPermission, onCollapsedChange }: SidebarProps) => {
   const [isCollapsed, setIsCollapsed] = useState(false);
+
+  // Check if device is mobile/tablet and set initial collapsed state
+  useEffect(() => {
+    const checkMobile = () => {
+      const isMobile = window.innerWidth < 768; // 768px is md breakpoint
+      setIsCollapsed(isMobile);
+      onCollapsedChange?.(isMobile);
+    };
+
+    // Check on initial load
+    checkMobile();
+
+    // Add resize listener
+    window.addEventListener('resize', checkMobile);
+    return () => window.removeEventListener('resize', checkMobile);
+  }, [onCollapsedChange]);
+
+  const toggleCollapsed = () => {
+    const newCollapsed = !isCollapsed;
+    setIsCollapsed(newCollapsed);
+    onCollapsedChange?.(newCollapsed);
+  };
+
+  const handleTabChange = (tab: string) => {
+    onTabChange(tab);
+    // Auto-collapse on mobile after navigation
+    if (window.innerWidth < 768) {
+      setIsCollapsed(true);
+      onCollapsedChange?.(true);
+    }
+  };
 
   const menuItems = [
     { 
       id: "dashboard", 
-      label: "Default Dashboard", 
+      label: "Dashboard", 
       icon: LayoutDashboard,
       permission: "dashboard_view"
     },
@@ -120,12 +151,12 @@ export const Sidebar = ({ activeTab, onTabChange, hasPermission }: SidebarProps)
     )}>
       <div className="flex items-center justify-between p-4 border-b border-gray-200">
         {!isCollapsed && (
-          <h2 className="text-xl font-bold text-gray-900">
+          <h2 className="text-lg md:text-xl font-bold text-gray-900">
             Schedule & Payroll
           </h2>
         )}
         <button
-          onClick={() => setIsCollapsed(!isCollapsed)}
+          onClick={toggleCollapsed}
           className="p-2 rounded-md hover:bg-gray-100"
         >
           <Menu className="h-5 w-5" />
@@ -141,9 +172,9 @@ export const Sidebar = ({ activeTab, onTabChange, hasPermission }: SidebarProps)
             return (
               <li key={item.id}>
                 <button
-                  onClick={() => onTabChange(item.id)}
+                  onClick={() => handleTabChange(item.id)}
                   className={cn(
-                    "w-full flex items-center px-3 py-2 text-left rounded-lg transition-colors",
+                    "w-full flex items-center px-3 py-2 text-left rounded-lg transition-colors text-sm md:text-base",
                     isActive
                       ? "bg-blue-100 text-blue-900 font-medium"
                       : "text-gray-700 hover:bg-gray-100"
@@ -151,7 +182,7 @@ export const Sidebar = ({ activeTab, onTabChange, hasPermission }: SidebarProps)
                   title={isCollapsed ? item.label : undefined}
                 >
                   <Icon className={cn("h-5 w-5", isCollapsed ? "mx-auto" : "mr-3")} />
-                  {!isCollapsed && <span>{item.label}</span>}
+                  {!isCollapsed && <span className="truncate">{item.label}</span>}
                 </button>
               </li>
             );
