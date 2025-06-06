@@ -1,16 +1,15 @@
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
-import { Plus, DollarSign, Eye, Edit, Trash2, CheckCircle, AlertCircle, Search, Filter } from "lucide-react";
+import { Plus, Search, Calculator } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
-import { Payroll, Profile } from "@/types/database";
+import { Payroll, Profile, WorkingHour, Client, Project, BankAccount } from "@/types/database";
 import { useToast } from "@/hooks/use-toast";
-import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
 
 interface PayrollManagementProps {
   payrolls: Payroll[];
@@ -19,42 +18,97 @@ interface PayrollManagementProps {
 }
 
 export const PayrollManagement = ({ payrolls, profiles, onRefresh }: PayrollManagementProps) => {
+  const [workingHours, setWorkingHours] = useState<WorkingHour[]>([]);
+  const [clients, setClients] = useState<Client[]>([]);
+  const [projects, setProjects] = useState<Project[]>([]);
+  const [bankAccounts, setBankAccounts] = useState<BankAccount[]>([]);
   const [loading, setLoading] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
-  const [statusFilter, setStatusFilter] = useState("all");
-  const [selectedPayroll, setSelectedPayroll] = useState<Payroll | null>(null);
-  const [showDetailsDialog, setShowDetailsDialog] = useState(false);
-  const [showFilters, setShowFilters] = useState(false);
+  const [isDialogOpen, setIsDialogOpen] = useState(false);
   const { toast } = useToast();
 
-  const filteredPayrolls = payrolls.filter(payroll => {
-    const matchesSearch = payroll.profiles?.full_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         payroll.pay_period_start.includes(searchTerm) ||
-                         payroll.pay_period_end.includes(searchTerm);
-    const matchesStatus = statusFilter === "all" || payroll.status === statusFilter;
-    return matchesSearch && matchesStatus;
+  const [formData, setFormData] = useState({
+    profile_id: "",
+    pay_period_start: "",
+    pay_period_end: "",
+    bank_account_id: ""
   });
 
-  const updatePayrollStatus = async (id: string, status: 'approved' | 'paid') => {
-    try {
-      setLoading(true);
-      const { error } = await supabase
-        .from('payroll')
-        .update({ status })
-        .eq('id', id);
+  useEffect(() => {
+    fetchAdditionalData();
+  }, []);
 
-      if (error) throw error;
-      
-      toast({ 
-        title: "Success", 
-        description: `Payroll ${status} successfully` 
-      });
-      onRefresh();
+  const fetchAdditionalData = async () => {
+    try {
+      const [hoursRes, clientsRes, projectsRes, banksRes] = await Promise.all([
+        supabase.from('working_hours').select(`
+          *,
+          profiles (id, full_name, email, role, avatar_url, is_active, phone, employment_type, hourly_rate, salary, tax_file_number, start_date, created_at, updated_at),
+          clients (id, name, email, phone, company, status, created_at, updated_at),
+          projects (id, name, description, client_id, status, start_date, end_date, budget, created_at, updated_at)
+        `).eq('status', 'approved'),
+        supabase.from('clients').select('*').eq('status', 'active'),
+        supabase.from('projects').select('*').eq('status', 'active'),
+        supabase.from('bank_accounts').select('*')
+      ]);
+
+      if (hoursRes.error) throw hoursRes.error;
+      if (clientsRes.error) throw clientsRes.error;
+      if (projectsRes.error) throw projectsRes.error;
+      if (banksRes.error) throw banksRes.error;
+
+      setWorkingHours(hoursRes.data as WorkingHour[]);
+      setClients(clientsRes.data as Client[]);
+      setProjects(projectsRes.data as Project[]);
+      setBankAccounts(banksRes.data as BankAccount[]);
     } catch (error) {
-      console.error('Error updating payroll status:', error);
+      console.error('Error fetching additional data:', error);
+    }
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setLoading(true);
+
+    try {
+      const relevantHours = workingHours.filter(wh => 
+        wh.profile_id === formData.profile_id &&
+        wh.date >= formData.pay_period_start &&
+        wh.date <= formData.pay_period_end
+      );
+
+      const totalHours = relevantHours.reduce((sum, wh) => sum + wh.total_hours, 0);
+      const profile = profiles.find(p => p.id === formData.profile_id);
+      const hourlyRate = profile?.hourly_rate || 0;
+      const grossPay = totalHours * hourlyRate;
+      const deductions = grossPay * 0.1;
+      const netPay = grossPay - deductions;
+
+      const payrollData = {
+        profile_id: formData.profile_id,
+        pay_period_start: formData.pay_period_start,
+        pay_period_end: formData.pay_period_end,
+        total_hours: totalHours,
+        hourly_rate: hourlyRate,
+        gross_pay: grossPay,
+        deductions: deductions,
+        net_pay: netPay,
+        bank_account_id: formData.bank_account_id || null,
+        status: 'pending' as const
+      };
+
+      const { error } = await supabase.from('payroll').insert([payrollData]);
+      if (error) throw error;
+
+      toast({ title: "Success", description: "Payroll created successfully" });
+      setIsDialogOpen(false);
+      setFormData({ profile_id: "", pay_period_start: "", pay_period_end: "", bank_account_id: "" });
+      onRefresh();
+    } catch (error: any) {
+      console.error('Error creating payroll:', error);
       toast({
         title: "Error",
-        description: "Failed to update payroll status",
+        description: error.message || "Failed to create payroll",
         variant: "destructive"
       });
     } finally {
@@ -62,256 +116,164 @@ export const PayrollManagement = ({ payrolls, profiles, onRefresh }: PayrollMana
     }
   };
 
-  const deletePayroll = async (id: string) => {
-    try {
-      setLoading(true);
-      const { error } = await supabase
-        .from('payroll')
-        .delete()
-        .eq('id', id);
-
-      if (error) throw error;
-
-      toast({
-        title: "Success",
-        description: "Payroll deleted successfully"
-      });
-      onRefresh();
-    } catch (error) {
-      console.error('Error deleting payroll:', error);
-      toast({
-        title: "Error",
-        description: "Failed to delete payroll",
-        variant: "destructive"
-      });
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const getStatusColor = (status: string) => {
-    switch (status) {
-      case 'paid': return 'bg-green-100 text-green-800';
-      case 'approved': return 'bg-blue-100 text-blue-800';
-      case 'pending': return 'bg-yellow-100 text-yellow-800';
-      default: return 'bg-gray-100 text-gray-800';
-    }
-  };
+  const filteredPayrolls = payrolls.filter(payroll =>
+    payroll.profiles?.full_name?.toLowerCase().includes(searchTerm.toLowerCase())
+  );
 
   return (
-    <div className="space-y-4">
-      {/* Header with Search and Filters */}
-      <Card>
-        <CardHeader className="pb-3">
-          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-            <CardTitle className="text-lg sm:text-xl">Individual Payroll Management</CardTitle>
-            
-            <div className="flex flex-col sm:flex-row gap-2 sm:gap-4">
-              {/* Search */}
-              <div className="relative flex-1 sm:flex-initial sm:w-64">
-                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
-                <Input
-                  placeholder="Search payrolls..."
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                  className="pl-10"
-                />
-              </div>
-
-              {/* Mobile Filter Button */}
-              <div className="sm:hidden">
-                <Sheet open={showFilters} onOpenChange={setShowFilters}>
-                  <SheetTrigger asChild>
-                    <Button variant="outline" size="sm">
-                      <Filter className="h-4 w-4 mr-2" />
-                      Filters
-                    </Button>
-                  </SheetTrigger>
-                  <SheetContent side="right" className="w-72">
-                    <div className="space-y-4 mt-6">
-                      <div>
-                        <Label>Status Filter</Label>
-                        <Select value={statusFilter} onValueChange={setStatusFilter}>
-                          <SelectTrigger>
-                            <SelectValue />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="all">All Statuses</SelectItem>
-                            <SelectItem value="pending">Pending</SelectItem>
-                            <SelectItem value="approved">Approved</SelectItem>
-                            <SelectItem value="paid">Paid</SelectItem>
-                          </SelectContent>
-                        </Select>
-                      </div>
-                    </div>
-                  </SheetContent>
-                </Sheet>
-              </div>
-
-              {/* Desktop Filter */}
-              <div className="hidden sm:block">
-                <Select value={statusFilter} onValueChange={setStatusFilter}>
-                  <SelectTrigger className="w-40">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">All Statuses</SelectItem>
-                    <SelectItem value="pending">Pending</SelectItem>
-                    <SelectItem value="approved">Approved</SelectItem>
-                    <SelectItem value="paid">Paid</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
+    <Card>
+      <CardHeader>
+        <div className="flex items-center justify-between">
+          <CardTitle>Individual Payroll Management</CardTitle>
+          <div className="flex items-center gap-4">
+            <div className="relative w-64">
+              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
+              <Input
+                placeholder="Search by employee name..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="pl-10"
+              />
             </div>
-          </div>
-        </CardHeader>
-      </Card>
-
-      {/* Payroll List */}
-      <div className="space-y-3">
-        {filteredPayrolls.map((payroll) => (
-          <Card key={payroll.id} className="hover:shadow-md transition-shadow">
-            <CardContent className="p-4">
-              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-                {/* Employee Info */}
-                <div className="flex items-center gap-3 min-w-0 flex-1">
-                  <div className="h-10 w-10 bg-gray-200 rounded-full flex items-center justify-center flex-shrink-0">
-                    <span className="font-medium text-gray-700 text-sm">
-                      {payroll.profiles?.full_name?.split(' ').map(n => n[0]).join('') || 'U'}
-                    </span>
-                  </div>
-                  <div className="min-w-0 flex-1">
-                    <h3 className="font-medium text-gray-900 truncate">
-                      {payroll.profiles?.full_name || 'Unknown Employee'}
-                    </h3>
-                    <p className="text-sm text-gray-600">
-                      {payroll.pay_period_start} to {payroll.pay_period_end}
-                    </p>
-                    <div className="flex items-center gap-4 mt-1 text-xs text-gray-500">
-                      <span>{payroll.total_hours}h</span>
-                      <span>${payroll.net_pay.toFixed(2)}</span>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Status and Actions */}
-                <div className="flex items-center justify-between sm:justify-end gap-3">
-                  <span className={`px-2 py-1 rounded-full text-xs font-medium ${getStatusColor(payroll.status)}`}>
-                    {payroll.status}
-                  </span>
-                  
-                  <div className="flex items-center gap-1">
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      onClick={() => {
-                        setSelectedPayroll(payroll);
-                        setShowDetailsDialog(true);
-                      }}
-                      className="h-8 w-8 p-0"
-                    >
-                      <Eye className="h-3 w-3" />
-                    </Button>
-
-                    {payroll.status === 'pending' && (
-                      <Button
-                        size="sm"
-                        onClick={() => updatePayrollStatus(payroll.id, 'approved')}
-                        disabled={loading}
-                        className="h-8 px-3 text-xs"
-                      >
-                        <CheckCircle className="h-3 w-3 mr-1" />
-                        Approve
-                      </Button>
-                    )}
-
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      onClick={() => deletePayroll(payroll.id)}
-                      disabled={loading}
-                      className="h-8 w-8 p-0 text-red-600 hover:text-red-700"
-                    >
-                      <Trash2 className="h-3 w-3" />
-                    </Button>
-                  </div>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-        ))}
-
-        {filteredPayrolls.length === 0 && (
-          <Card>
-            <CardContent className="text-center py-12">
-              <DollarSign className="h-12 w-12 mx-auto mb-4 text-gray-300" />
-              <h3 className="text-lg font-medium text-gray-900 mb-2">No payroll records found</h3>
-              <p className="text-gray-600 mb-4">
-                {searchTerm || statusFilter !== "all" 
-                  ? "Try adjusting your search or filters" 
-                  : "Create your first payroll record to get started"}
-              </p>
-              {(!searchTerm && statusFilter === "all") && (
+            <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+              <DialogTrigger asChild>
                 <Button>
                   <Plus className="h-4 w-4 mr-2" />
                   Create Payroll
                 </Button>
-              )}
-            </CardContent>
-          </Card>
-        )}
-      </div>
+              </DialogTrigger>
+              <DialogContent className="max-w-2xl">
+                <DialogHeader>
+                  <DialogTitle>Create New Payroll</DialogTitle>
+                </DialogHeader>
+                <form onSubmit={handleSubmit} className="space-y-4">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <Label htmlFor="profile_id">Employee *</Label>
+                      <Select value={formData.profile_id} onValueChange={(value) => setFormData({ ...formData, profile_id: value })}>
+                        <SelectTrigger>
+                          <SelectValue placeholder="Select employee" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {profiles.map((profile) => (
+                            <SelectItem key={profile.id} value={profile.id}>
+                              {profile.full_name}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
 
-      {/* Payroll Details Dialog */}
-      <Dialog open={showDetailsDialog} onOpenChange={setShowDetailsDialog}>
-        <DialogContent className="max-w-md mx-auto max-h-[90vh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle className="text-lg">Payroll Details</DialogTitle>
-          </DialogHeader>
-          {selectedPayroll && (
-            <div className="space-y-4">
-              <div className="grid grid-cols-2 gap-4 text-sm">
-                <div>
-                  <Label className="text-gray-600">Employee</Label>
-                  <div className="font-medium">{selectedPayroll.profiles?.full_name}</div>
-                </div>
-                <div>
-                  <Label className="text-gray-600">Status</Label>
-                  <span className={`inline-block px-2 py-1 rounded-full text-xs font-medium ${getStatusColor(selectedPayroll.status)}`}>
-                    {selectedPayroll.status}
-                  </span>
-                </div>
-                <div>
-                  <Label className="text-gray-600">Pay Period</Label>
-                  <div className="font-medium">
-                    {selectedPayroll.pay_period_start} to {selectedPayroll.pay_period_end}
+                    <div>
+                      <Label htmlFor="bank_account_id">Bank Account</Label>
+                      <Select value={formData.bank_account_id} onValueChange={(value) => setFormData({ ...formData, bank_account_id: value })}>
+                        <SelectTrigger>
+                          <SelectValue placeholder="Select bank account" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="">No Bank Account</SelectItem>
+                          {bankAccounts.map((account) => (
+                            <SelectItem key={account.id} value={account.id}>
+                              {account.bank_name} - {account.account_number}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+
+                    <div>
+                      <Label htmlFor="pay_period_start">Pay Period Start *</Label>
+                      <Input
+                        id="pay_period_start"
+                        type="date"
+                        value={formData.pay_period_start}
+                        onChange={(e) => setFormData({ ...formData, pay_period_start: e.target.value })}
+                        required
+                      />
+                    </div>
+
+                    <div>
+                      <Label htmlFor="pay_period_end">Pay Period End *</Label>
+                      <Input
+                        id="pay_period_end"
+                        type="date"
+                        value={formData.pay_period_end}
+                        onChange={(e) => setFormData({ ...formData, pay_period_end: e.target.value })}
+                        required
+                      />
+                    </div>
                   </div>
-                </div>
-                <div>
-                  <Label className="text-gray-600">Total Hours</Label>
-                  <div className="font-medium">{selectedPayroll.total_hours}h</div>
-                </div>
-                <div>
-                  <Label className="text-gray-600">Hourly Rate</Label>
-                  <div className="font-medium">${selectedPayroll.hourly_rate}/hr</div>
-                </div>
-                <div>
-                  <Label className="text-gray-600">Gross Pay</Label>
-                  <div className="font-medium">${selectedPayroll.gross_pay.toFixed(2)}</div>
-                </div>
-                <div>
-                  <Label className="text-gray-600">Deductions</Label>
-                  <div className="font-medium">${selectedPayroll.deductions.toFixed(2)}</div>
-                </div>
-                <div>
-                  <Label className="text-gray-600">Net Pay</Label>
-                  <div className="font-medium text-green-600">${selectedPayroll.net_pay.toFixed(2)}</div>
-                </div>
-              </div>
-            </div>
-          )}
-        </DialogContent>
-      </Dialog>
-    </div>
+
+                  <Button type="submit" disabled={loading} className="w-full">
+                    {loading ? "Creating..." : "Create Payroll"}
+                  </Button>
+                </form>
+              </DialogContent>
+            </Dialog>
+          </div>
+        </div>
+      </CardHeader>
+      <CardContent>
+        <div className="overflow-x-auto">
+          <table className="w-full">
+            <thead>
+              <tr className="border-b border-gray-200">
+                <th className="text-left py-3 px-4 font-medium text-gray-600">Employee</th>
+                <th className="text-left py-3 px-4 font-medium text-gray-600">Pay Period</th>
+                <th className="text-left py-3 px-4 font-medium text-gray-600">Hours</th>
+                <th className="text-left py-3 px-4 font-medium text-gray-600">Gross Pay</th>
+                <th className="text-left py-3 px-4 font-medium text-gray-600">Deductions</th>
+                <th className="text-left py-3 px-4 font-medium text-gray-600">Net Pay</th>
+                <th className="text-left py-3 px-4 font-medium text-gray-600">Status</th>
+              </tr>
+            </thead>
+            <tbody>
+              {filteredPayrolls.map((payroll) => (
+                <tr key={payroll.id} className="border-b border-gray-100 hover:bg-gray-50">
+                  <td className="py-3 px-4 text-gray-900">
+                    {payroll.profiles?.full_name || 'Unknown'}
+                  </td>
+                  <td className="py-3 px-4 text-gray-600">
+                    {new Date(payroll.pay_period_start).toLocaleDateString()} - {new Date(payroll.pay_period_end).toLocaleDateString()}
+                  </td>
+                  <td className="py-3 px-4 text-gray-600">
+                    {payroll.total_hours.toFixed(1)}
+                  </td>
+                  <td className="py-3 px-4 text-gray-900 font-medium">
+                    ${payroll.gross_pay.toFixed(2)}
+                  </td>
+                  <td className="py-3 px-4 text-red-600">
+                    ${payroll.deductions.toFixed(2)}
+                  </td>
+                  <td className="py-3 px-4 text-green-600 font-bold">
+                    ${payroll.net_pay.toFixed(2)}
+                  </td>
+                  <td className="py-3 px-4">
+                    <span className={`px-2 py-1 rounded-full text-xs font-medium ${
+                      payroll.status === 'paid' 
+                        ? 'bg-green-100 text-green-800' 
+                        : payroll.status === 'approved'
+                        ? 'bg-blue-100 text-blue-800'
+                        : 'bg-yellow-100 text-yellow-800'
+                    }`}>
+                      {payroll.status}
+                    </span>
+                  </td>
+                </tr>
+              ))}
+              {filteredPayrolls.length === 0 && (
+                <tr>
+                  <td colSpan={7} className="text-center py-8 text-gray-500">
+                    <Calculator className="h-12 w-12 mx-auto mb-4 text-gray-300" />
+                    <p>No payroll records found</p>
+                    <p className="text-sm">Create a payroll to get started</p>
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+      </CardContent>
+    </Card>
   );
 };
