@@ -1,193 +1,174 @@
 
 import { useState, useMemo } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, LineChart, Line } from "recharts";
-import { TrendingUp, DollarSign, Users, Calendar, Download, Filter } from "lucide-react";
-import { Payroll, WorkingHour, BankTransaction, Profile } from "@/types/database";
 import { Button } from "@/components/ui/button";
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, LineChart, Line } from "recharts";
+import { TrendingUp, Users, DollarSign, Download, Calendar, Filter } from "lucide-react";
+import { Payroll, BulkPayroll, SalaryTemplate } from "@/types/database";
+import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
+import { Label } from "@/components/ui/label";
 
 interface SalaryReportsProps {
   payrolls: Payroll[];
-  workingHours: WorkingHour[];
-  bankTransactions: BankTransaction[];
-  profiles: Profile[];
+  bulkPayrolls: BulkPayroll[];
+  templates: SalaryTemplate[];
 }
 
-export const SalaryReports = ({ payrolls, workingHours, bankTransactions, profiles }: SalaryReportsProps) => {
-  const [timeRange, setTimeRange] = useState("3months");
-  const [selectedMetric, setSelectedMetric] = useState("netPay");
+export const SalaryReports = ({ payrolls, bulkPayrolls, templates }: SalaryReportsProps) => {
+  const [selectedPeriod, setSelectedPeriod] = useState("monthly");
+  const [selectedYear, setSelectedYear] = useState(new Date().getFullYear().toString());
+  const [showFilters, setShowFilters] = useState(false);
 
-  // Calculate date range
-  const getDateRange = () => {
-    const now = new Date();
-    let months = 3;
+  const years = useMemo(() => {
+    const yearSet = new Set<number>();
+    payrolls.forEach(p => {
+      yearSet.add(new Date(p.pay_period_start).getFullYear());
+    });
+    return Array.from(yearSet).sort((a, b) => b - a);
+  }, [payrolls]);
+
+  const payrollByMonth = useMemo(() => {
+    const monthlyData = new Array(12).fill(0).map((_, index) => ({
+      month: new Date(0, index).toLocaleString('default', { month: 'short' }),
+      amount: 0,
+      count: 0
+    }));
+
+    payrolls
+      .filter(p => new Date(p.pay_period_start).getFullYear().toString() === selectedYear)
+      .forEach(payroll => {
+        const month = new Date(payroll.pay_period_start).getMonth();
+        monthlyData[month].amount += payroll.net_pay;
+        monthlyData[month].count += 1;
+      });
+
+    return monthlyData;
+  }, [payrolls, selectedYear]);
+
+  const statusDistribution = useMemo(() => {
+    const statusCount = { pending: 0, approved: 0, paid: 0 };
+    payrolls.forEach(p => {
+      statusCount[p.status as keyof typeof statusCount] += 1;
+    });
+
+    return [
+      { name: 'Pending', value: statusCount.pending, color: '#f59e0b' },
+      { name: 'Approved', value: statusCount.approved, color: '#3b82f6' },
+      { name: 'Paid', value: statusCount.paid, color: '#10b981' }
+    ];
+  }, [payrolls]);
+
+  const topEmployees = useMemo(() => {
+    const employeeData: Record<string, { name: string; total: number; hours: number }> = {};
     
-    switch (timeRange) {
-      case "1month": months = 1; break;
-      case "6months": months = 6; break;
-      case "1year": months = 12; break;
-      default: months = 3;
-    }
-    
-    const startDate = new Date(now.getFullYear(), now.getMonth() - months, 1);
-    return { startDate, endDate: now };
-  };
-
-  const { startDate, endDate } = getDateRange();
-
-  // Filter data by date range
-  const filteredPayrolls = payrolls.filter(p => {
-    const payrollDate = new Date(p.pay_period_end);
-    return payrollDate >= startDate && payrollDate <= endDate;
-  });
-
-  // Monthly payroll trends
-  const monthlyData = useMemo(() => {
-    const monthlyMap = new Map();
-    
-    filteredPayrolls.forEach(payroll => {
-      const month = new Date(payroll.pay_period_end).toLocaleString('default', { month: 'short', year: '2-digit' });
+    payrolls.forEach(p => {
+      const key = p.profile_id;
+      const name = p.profiles?.full_name || 'Unknown';
       
-      if (!monthlyMap.has(month)) {
-        monthlyMap.set(month, {
-          month,
-          totalNetPay: 0,
-          totalGrossPay: 0,
-          totalHours: 0,
-          employeeCount: 0
-        });
+      if (!employeeData[key]) {
+        employeeData[key] = { name, total: 0, hours: 0 };
       }
       
-      const data = monthlyMap.get(month);
-      data.totalNetPay += payroll.net_pay;
-      data.totalGrossPay += payroll.gross_pay;
-      data.totalHours += payroll.total_hours;
-      data.employeeCount += 1;
+      employeeData[key].total += p.net_pay;
+      employeeData[key].hours += p.total_hours;
     });
-    
-    return Array.from(monthlyMap.values()).sort((a, b) => 
-      new Date(a.month).getTime() - new Date(b.month).getTime()
-    );
-  }, [filteredPayrolls]);
 
-  // Department/Role breakdown
-  const roleData = useMemo(() => {
-    const roleMap = new Map();
-    
-    filteredPayrolls.forEach(payroll => {
-      const role = payroll.profiles?.role || 'Unknown';
-      
-      if (!roleMap.has(role)) {
-        roleMap.set(role, {
-          role,
-          totalPay: 0,
-          count: 0,
-          avgPay: 0
-        });
-      }
-      
-      const data = roleMap.get(role);
-      data.totalPay += payroll.net_pay;
-      data.count += 1;
-      data.avgPay = data.totalPay / data.count;
-    });
-    
-    return Array.from(roleMap.values());
-  }, [filteredPayrolls]);
+    return Object.values(employeeData)
+      .sort((a, b) => b.total - a.total)
+      .slice(0, 5);
+  }, [payrolls]);
 
-  // Top earners
-  const topEarners = useMemo(() => {
-    const earnerMap = new Map();
-    
-    filteredPayrolls.forEach(payroll => {
-      const profileId = payroll.profile_id;
-      const name = payroll.profiles?.full_name || 'Unknown';
-      
-      if (!earnerMap.has(profileId)) {
-        earnerMap.set(profileId, {
-          name,
-          totalPay: 0,
-          totalHours: 0,
-          avgHourlyRate: payroll.hourly_rate
-        });
-      }
-      
-      const data = earnerMap.get(profileId);
-      data.totalPay += payroll.net_pay;
-      data.totalHours += payroll.total_hours;
-    });
-    
-    return Array.from(earnerMap.values())
-      .sort((a, b) => b.totalPay - a.totalPay)
-      .slice(0, 10);
-  }, [filteredPayrolls]);
+  const FiltersContent = () => (
+    <div className="space-y-4">
+      <div>
+        <Label>Time Period</Label>
+        <Select value={selectedPeriod} onValueChange={setSelectedPeriod}>
+          <SelectTrigger>
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="monthly">Monthly</SelectItem>
+            <SelectItem value="quarterly">Quarterly</SelectItem>
+            <SelectItem value="yearly">Yearly</SelectItem>
+          </SelectContent>
+        </Select>
+      </div>
 
-  // Summary statistics
-  const summaryStats = useMemo(() => {
-    const totalNetPay = filteredPayrolls.reduce((sum, p) => sum + p.net_pay, 0);
-    const totalGrossPay = filteredPayrolls.reduce((sum, p) => sum + p.gross_pay, 0);
-    const totalHours = filteredPayrolls.reduce((sum, p) => sum + p.total_hours, 0);
-    const avgHourlyRate = filteredPayrolls.length > 0 
-      ? filteredPayrolls.reduce((sum, p) => sum + p.hourly_rate, 0) / filteredPayrolls.length 
-      : 0;
-    
-    return {
-      totalNetPay,
-      totalGrossPay,
-      totalHours,
-      avgHourlyRate,
-      employeeCount: new Set(filteredPayrolls.map(p => p.profile_id)).size,
-      totalDeductions: totalGrossPay - totalNetPay
-    };
-  }, [filteredPayrolls]);
-
-  const COLORS = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042', '#8884D8'];
-
-  const exportReport = () => {
-    const reportData = {
-      summary: summaryStats,
-      monthlyTrends: monthlyData,
-      roleBreakdown: roleData,
-      topEarners: topEarners,
-      generatedAt: new Date().toISOString()
-    };
-    
-    const dataStr = JSON.stringify(reportData, null, 2);
-    const dataBlob = new Blob([dataStr], { type: 'application/json' });
-    
-    const url = URL.createObjectURL(dataBlob);
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = `salary-report-${timeRange}.json`;
-    link.click();
-    URL.revokeObjectURL(url);
-  };
+      <div>
+        <Label>Year</Label>
+        <Select value={selectedYear} onValueChange={setSelectedYear}>
+          <SelectTrigger>
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            {years.map(year => (
+              <SelectItem key={year} value={year.toString()}>
+                {year}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </div>
+    </div>
+  );
 
   return (
-    <div className="space-y-6">
-      {/* Controls */}
+    <div className="space-y-4 sm:space-y-6">
+      {/* Header */}
       <Card>
-        <CardHeader>
-          <div className="flex items-center justify-between">
-            <CardTitle className="flex items-center gap-2">
-              <TrendingUp className="h-5 w-5" />
-              Salary Reports & Analytics
-            </CardTitle>
+        <CardHeader className="pb-3">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+            <CardTitle className="text-lg sm:text-xl">Salary Reports & Analytics</CardTitle>
+            
             <div className="flex gap-2">
-              <Select value={timeRange} onValueChange={setTimeRange}>
-                <SelectTrigger className="w-32">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="1month">1 Month</SelectItem>
-                  <SelectItem value="3months">3 Months</SelectItem>
-                  <SelectItem value="6months">6 Months</SelectItem>
-                  <SelectItem value="1year">1 Year</SelectItem>
-                </SelectContent>
-              </Select>
-              <Button variant="outline" onClick={exportReport}>
-                <Download className="h-4 w-4 mr-1" />
+              {/* Mobile Filters */}
+              <div className="sm:hidden">
+                <Sheet open={showFilters} onOpenChange={setShowFilters}>
+                  <SheetTrigger asChild>
+                    <Button variant="outline" size="sm">
+                      <Filter className="h-4 w-4 mr-2" />
+                      Filters
+                    </Button>
+                  </SheetTrigger>
+                  <SheetContent side="right" className="w-72">
+                    <div className="mt-6">
+                      <FiltersContent />
+                    </div>
+                  </SheetContent>
+                </Sheet>
+              </div>
+
+              {/* Desktop Filters */}
+              <div className="hidden sm:flex gap-2">
+                <Select value={selectedPeriod} onValueChange={setSelectedPeriod}>
+                  <SelectTrigger className="w-32">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="monthly">Monthly</SelectItem>
+                    <SelectItem value="quarterly">Quarterly</SelectItem>
+                    <SelectItem value="yearly">Yearly</SelectItem>
+                  </SelectContent>
+                </Select>
+
+                <Select value={selectedYear} onValueChange={setSelectedYear}>
+                  <SelectTrigger className="w-24">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {years.map(year => (
+                      <SelectItem key={year} value={year.toString()}>
+                        {year}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <Button variant="outline" size="sm">
+                <Download className="h-4 w-4 mr-2" />
                 Export
               </Button>
             </div>
@@ -196,217 +177,154 @@ export const SalaryReports = ({ payrolls, workingHours, bankTransactions, profil
       </Card>
 
       {/* Summary Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-6 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         <Card>
-          <CardContent className="pt-4">
+          <CardContent className="p-4">
             <div className="flex items-center justify-between">
-              <div className="text-sm text-gray-600">Total Net Pay</div>
-              <DollarSign className="h-4 w-4 text-green-600" />
+              <div>
+                <p className="text-sm text-gray-600">Total Payroll</p>
+                <p className="text-xl sm:text-2xl font-bold text-green-600">
+                  ${payrolls.reduce((sum, p) => sum + p.net_pay, 0).toLocaleString()}
+                </p>
+              </div>
+              <DollarSign className="h-6 w-6 sm:h-8 sm:w-8 text-green-600" />
             </div>
-            <div className="text-2xl font-bold text-green-600">${summaryStats.totalNetPay.toFixed(2)}</div>
           </CardContent>
         </Card>
 
         <Card>
-          <CardContent className="pt-4">
+          <CardContent className="p-4">
             <div className="flex items-center justify-between">
-              <div className="text-sm text-gray-600">Total Hours</div>
-              <Calendar className="h-4 w-4 text-blue-600" />
+              <div>
+                <p className="text-sm text-gray-600">Total Employees</p>
+                <p className="text-xl sm:text-2xl font-bold text-blue-600">
+                  {new Set(payrolls.map(p => p.profile_id)).size}
+                </p>
+              </div>
+              <Users className="h-6 w-6 sm:h-8 sm:w-8 text-blue-600" />
             </div>
-            <div className="text-2xl font-bold text-blue-600">{summaryStats.totalHours.toFixed(1)}</div>
           </CardContent>
         </Card>
 
         <Card>
-          <CardContent className="pt-4">
+          <CardContent className="p-4">
             <div className="flex items-center justify-between">
-              <div className="text-sm text-gray-600">Employees</div>
-              <Users className="h-4 w-4 text-purple-600" />
+              <div>
+                <p className="text-sm text-gray-600">Avg Monthly</p>
+                <p className="text-xl sm:text-2xl font-bold text-purple-600">
+                  ${(payrollByMonth.reduce((sum, m) => sum + m.amount, 0) / 12).toLocaleString()}
+                </p>
+              </div>
+              <TrendingUp className="h-6 w-6 sm:h-8 sm:w-8 text-purple-600" />
             </div>
-            <div className="text-2xl font-bold text-purple-600">{summaryStats.employeeCount}</div>
           </CardContent>
         </Card>
 
         <Card>
-          <CardContent className="pt-4">
+          <CardContent className="p-4">
             <div className="flex items-center justify-between">
-              <div className="text-sm text-gray-600">Avg Hourly Rate</div>
-              <DollarSign className="h-4 w-4 text-orange-600" />
+              <div>
+                <p className="text-sm text-gray-600">Bulk Operations</p>
+                <p className="text-xl sm:text-2xl font-bold text-orange-600">
+                  {bulkPayrolls.length}
+                </p>
+              </div>
+              <Calendar className="h-6 w-6 sm:h-8 sm:w-8 text-orange-600" />
             </div>
-            <div className="text-2xl font-bold text-orange-600">${summaryStats.avgHourlyRate.toFixed(2)}</div>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardContent className="pt-4">
-            <div className="flex items-center justify-between">
-              <div className="text-sm text-gray-600">Total Deductions</div>
-              <DollarSign className="h-4 w-4 text-red-600" />
-            </div>
-            <div className="text-2xl font-bold text-red-600">${summaryStats.totalDeductions.toFixed(2)}</div>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardContent className="pt-4">
-            <div className="flex items-center justify-between">
-              <div className="text-sm text-gray-600">Gross Pay</div>
-              <DollarSign className="h-4 w-4 text-indigo-600" />
-            </div>
-            <div className="text-2xl font-bold text-indigo-600">${summaryStats.totalGrossPay.toFixed(2)}</div>
           </CardContent>
         </Card>
       </div>
 
       {/* Charts */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Monthly Trends */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6">
+        {/* Monthly Payroll Trend */}
         <Card>
           <CardHeader>
-            <CardTitle>Monthly Payroll Trends</CardTitle>
+            <CardTitle className="text-lg">Monthly Payroll Trend ({selectedYear})</CardTitle>
           </CardHeader>
           <CardContent>
-            <ResponsiveContainer width="100%" height={300}>
-              <LineChart data={monthlyData}>
-                <CartesianGrid strokeDasharray="3 3" />
-                <XAxis dataKey="month" />
-                <YAxis />
-                <Tooltip formatter={(value: any) => [`$${value.toFixed(2)}`, 'Net Pay']} />
-                <Line type="monotone" dataKey="totalNetPay" stroke="#8884d8" strokeWidth={2} />
-              </LineChart>
-            </ResponsiveContainer>
-          </CardContent>
-        </Card>
-
-        {/* Role Distribution */}
-        <Card>
-          <CardHeader>
-            <CardTitle>Pay Distribution by Role</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <ResponsiveContainer width="100%" height={300}>
-              <PieChart>
-                <Pie
-                  data={roleData}
-                  cx="50%"
-                  cy="50%"
-                  labelLine={false}
-                  label={({ role, percent }) => `${role} (${(percent * 100).toFixed(0)}%)`}
-                  outerRadius={80}
-                  fill="#8884d8"
-                  dataKey="totalPay"
-                >
-                  {roleData.map((entry, index) => (
-                    <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-                  ))}
-                </Pie>
-                <Tooltip formatter={(value: any) => [`$${value.toFixed(2)}`, 'Total Pay']} />
-              </PieChart>
-            </ResponsiveContainer>
-          </CardContent>
-        </Card>
-
-        {/* Top Earners */}
-        <Card>
-          <CardHeader>
-            <CardTitle>Top Earners</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <ResponsiveContainer width="100%" height={300}>
-              <BarChart data={topEarners} layout="horizontal">
-                <CartesianGrid strokeDasharray="3 3" />
-                <XAxis type="number" />
-                <YAxis dataKey="name" type="category" width={80} />
-                <Tooltip formatter={(value: any) => [`$${value.toFixed(2)}`, 'Total Pay']} />
-                <Bar dataKey="totalPay" fill="#82ca9d" />
-              </BarChart>
-            </ResponsiveContainer>
-          </CardContent>
-        </Card>
-
-        {/* Monthly Hours */}
-        <Card>
-          <CardHeader>
-            <CardTitle>Monthly Hours Worked</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <ResponsiveContainer width="100%" height={300}>
-              <BarChart data={monthlyData}>
-                <CartesianGrid strokeDasharray="3 3" />
-                <XAxis dataKey="month" />
-                <YAxis />
-                <Tooltip formatter={(value: any) => [`${value.toFixed(1)} hrs`, 'Hours']} />
-                <Bar dataKey="totalHours" fill="#ffc658" />
-              </BarChart>
-            </ResponsiveContainer>
-          </CardContent>
-        </Card>
-      </div>
-
-      {/* Detailed Tables */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Role Breakdown Table */}
-        <Card>
-          <CardHeader>
-            <CardTitle>Role Analysis</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="overflow-x-auto">
-              <table className="w-full">
-                <thead>
-                  <tr className="border-b border-gray-200">
-                    <th className="text-left py-2 px-3 font-medium text-gray-600">Role</th>
-                    <th className="text-right py-2 px-3 font-medium text-gray-600">Count</th>
-                    <th className="text-right py-2 px-3 font-medium text-gray-600">Total Pay</th>
-                    <th className="text-right py-2 px-3 font-medium text-gray-600">Avg Pay</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {roleData.map((role) => (
-                    <tr key={role.role} className="border-b border-gray-100">
-                      <td className="py-2 px-3 font-medium">{role.role}</td>
-                      <td className="py-2 px-3 text-right">{role.count}</td>
-                      <td className="py-2 px-3 text-right">${role.totalPay.toFixed(2)}</td>
-                      <td className="py-2 px-3 text-right">${role.avgPay.toFixed(2)}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+            <div className="h-64 sm:h-80">
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={payrollByMonth}>
+                  <CartesianGrid strokeDasharray="3 3" />
+                  <XAxis 
+                    dataKey="month" 
+                    fontSize={12}
+                    tick={{ fontSize: 10 }}
+                  />
+                  <YAxis 
+                    fontSize={12}
+                    tick={{ fontSize: 10 }}
+                    tickFormatter={(value) => `$${(value / 1000).toFixed(0)}k`}
+                  />
+                  <Tooltip 
+                    formatter={(value: number) => [`$${value.toLocaleString()}`, 'Amount']}
+                  />
+                  <Bar dataKey="amount" fill="#10b981" radius={[4, 4, 0, 0]} />
+                </BarChart>
+              </ResponsiveContainer>
             </div>
           </CardContent>
         </Card>
 
-        {/* Top Earners Table */}
+        {/* Status Distribution */}
         <Card>
           <CardHeader>
-            <CardTitle>Top Earners Details</CardTitle>
+            <CardTitle className="text-lg">Payroll Status Distribution</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="overflow-x-auto">
-              <table className="w-full">
-                <thead>
-                  <tr className="border-b border-gray-200">
-                    <th className="text-left py-2 px-3 font-medium text-gray-600">Employee</th>
-                    <th className="text-right py-2 px-3 font-medium text-gray-600">Hours</th>
-                    <th className="text-right py-2 px-3 font-medium text-gray-600">Rate</th>
-                    <th className="text-right py-2 px-3 font-medium text-gray-600">Total Pay</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {topEarners.slice(0, 8).map((earner, index) => (
-                    <tr key={index} className="border-b border-gray-100">
-                      <td className="py-2 px-3 font-medium">{earner.name}</td>
-                      <td className="py-2 px-3 text-right">{earner.totalHours.toFixed(1)}</td>
-                      <td className="py-2 px-3 text-right">${earner.avgHourlyRate.toFixed(2)}</td>
-                      <td className="py-2 px-3 text-right font-bold">${earner.totalPay.toFixed(2)}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+            <div className="h-64 sm:h-80">
+              <ResponsiveContainer width="100%" height="100%">
+                <PieChart>
+                  <Pie
+                    data={statusDistribution}
+                    dataKey="value"
+                    nameKey="name"
+                    cx="50%"
+                    cy="50%"
+                    outerRadius={80}
+                    label={({ name, value }) => `${name}: ${value}`}
+                    labelStyle={{ fontSize: 12 }}
+                  >
+                    {statusDistribution.map((entry, index) => (
+                      <Cell key={`cell-${index}`} fill={entry.color} />
+                    ))}
+                  </Pie>
+                  <Tooltip />
+                </PieChart>
+              </ResponsiveContainer>
             </div>
           </CardContent>
         </Card>
       </div>
+
+      {/* Top Employees */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-lg">Top Employees by Earnings</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="space-y-3">
+            {topEmployees.map((employee, index) => (
+              <div key={index} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                <div className="flex items-center gap-3">
+                  <div className="w-8 h-8 bg-blue-100 text-blue-600 rounded-full flex items-center justify-center font-medium text-sm">
+                    {index + 1}
+                  </div>
+                  <div>
+                    <p className="font-medium text-gray-900">{employee.name}</p>
+                    <p className="text-sm text-gray-600">{employee.hours.toFixed(1)} hours</p>
+                  </div>
+                </div>
+                <div className="text-right">
+                  <p className="font-semibold text-green-600">${employee.total.toLocaleString()}</p>
+                  <p className="text-xs text-gray-500">Total earnings</p>
+                </div>
+              </div>
+            ))}
+          </div>
+        </CardContent>
+      </Card>
     </div>
   );
 };
