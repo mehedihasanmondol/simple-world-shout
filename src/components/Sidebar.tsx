@@ -152,7 +152,7 @@ export const Sidebar = ({ activeTab, onTabChange, hasPermission, onCollapsedChan
 
   return (
     <div className={cn(
-      "bg-background border-r border-border transition-all duration-300 flex flex-col",
+      "bg-white border-r border-gray-200 transition-all duration-300 flex flex-col",
       isMobile 
         ? "h-full w-full" 
         : cn(
@@ -160,16 +160,16 @@ export const Sidebar = ({ activeTab, onTabChange, hasPermission, onCollapsedChan
             isCollapsed ? "w-16" : "w-64"
           )
     )}>
-      <div className="flex items-center justify-between p-4 border-b border-border flex-shrink-0">
+      <div className="flex items-center justify-between p-4 border-b border-gray-200 flex-shrink-0">
         {(!isCollapsed || isMobile) && (
-          <h2 className="text-lg md:text-xl font-bold text-foreground">
+          <h2 className="text-lg md:text-xl font-bold text-gray-900">
             Schedule & Payroll
           </h2>
         )}
         {!isMobile && (
           <button
             onClick={toggleCollapsed}
-            className="p-2 rounded-md hover:bg-accent"
+            className="p-2 rounded-md hover:bg-gray-100"
           >
             <Menu className="h-5 w-5" />
           </button>
@@ -190,8 +190,8 @@ export const Sidebar = ({ activeTab, onTabChange, hasPermission, onCollapsedChan
                     className={cn(
                       "w-full flex items-center px-3 py-2 text-left rounded-lg transition-colors text-sm md:text-base",
                       isActive
-                        ? "bg-primary text-primary-foreground font-medium"
-                        : "text-foreground hover:bg-accent hover:text-accent-foreground"
+                        ? "bg-blue-100 text-blue-900 font-medium"
+                        : "text-gray-700 hover:bg-gray-100"
                     )}
                     title={isCollapsed && !isMobile ? item.label : undefined}
                   >
