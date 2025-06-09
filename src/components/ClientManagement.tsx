@@ -183,7 +183,7 @@ export const ClientManagement = () => {
   return (
     <div className="space-y-4 md:space-y-6 p-4 md:p-0">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-        <h1 className="text-2xl md:text-3xl font-bold text-gray-900">Client Management</h1>
+        <h1 className="text-2xl md:text-3xl font-bold text-foreground">Client Management</h1>
         <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
           <DialogTrigger asChild>
             <Button className="flex items-center gap-2 w-full sm:w-auto" onClick={() => {
@@ -258,21 +258,21 @@ export const ClientManagement = () => {
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4 md:gap-6">
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium text-gray-600">Total Clients</CardTitle>
+            <CardTitle className="text-sm font-medium text-muted-foreground">Total Clients</CardTitle>
             <Building2 className="h-5 w-5 text-blue-600" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold text-gray-900">{clients.length}</div>
+            <div className="text-2xl font-bold text-foreground">{clients.length}</div>
           </CardContent>
         </Card>
 
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium text-gray-600">Active Clients</CardTitle>
+            <CardTitle className="text-sm font-medium text-muted-foreground">Active Clients</CardTitle>
             <Building2 className="h-5 w-5 text-green-600" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold text-gray-900">
+            <div className="text-2xl font-bold text-foreground">
               {clients.filter(c => c.status === "active").length}
             </div>
           </CardContent>
@@ -280,11 +280,11 @@ export const ClientManagement = () => {
 
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium text-gray-600">Total Projects</CardTitle>
+            <CardTitle className="text-sm font-medium text-muted-foreground">Total Projects</CardTitle>
             <Building2 className="h-5 w-5 text-purple-600" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold text-gray-900">{totalProjects}</div>
+            <div className="text-2xl font-bold text-foreground">{totalProjects}</div>
           </CardContent>
         </Card>
       </div>
@@ -294,7 +294,7 @@ export const ClientManagement = () => {
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
             <CardTitle className="text-lg md:text-xl">Clients</CardTitle>
             <div className="relative w-full sm:w-64">
-              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
+              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground h-4 w-4" />
               <Input
                 placeholder="Search clients..."
                 value={searchTerm}
@@ -309,14 +309,14 @@ export const ClientManagement = () => {
             {/* Mobile/Tablet Card Layout */}
             <div className="block lg:hidden space-y-3 p-4">
               {filteredClients.map((client) => (
-                <div key={client.id} className="bg-white border rounded-lg p-4 space-y-3">
+                <div key={client.id} className="bg-card border border-border rounded-lg p-4 space-y-3">
                   <div className="flex items-start justify-between">
                     <div className="flex-1 min-w-0">
-                      <h3 className="font-medium text-sm text-gray-900 truncate">
+                      <h3 className="font-medium text-sm text-foreground truncate">
                         {client.company}
                       </h3>
-                      <p className="text-xs text-gray-500 truncate">{client.name}</p>
-                      <p className="text-xs text-gray-500 truncate">{client.email}</p>
+                      <p className="text-xs text-muted-foreground truncate">{client.name}</p>
+                      <p className="text-xs text-muted-foreground truncate">{client.email}</p>
                     </div>
                     <div className="flex items-center gap-2">
                       <Badge variant={client.status === "active" ? "default" : "secondary"} className="text-xs">
@@ -328,12 +328,12 @@ export const ClientManagement = () => {
                   
                   <div className="grid grid-cols-2 gap-3 text-xs">
                     <div>
-                      <span className="text-gray-500">Phone:</span>
-                      <p className="font-medium">{client.phone || '-'}</p>
+                      <span className="text-muted-foreground">Phone:</span>
+                      <p className="font-medium text-foreground">{client.phone || '-'}</p>
                     </div>
                     <div>
-                      <span className="text-gray-500">Projects:</span>
-                      <p className="font-medium">{projectCounts[client.id] || 0}</p>
+                      <span className="text-muted-foreground">Projects:</span>
+                      <p className="font-medium text-foreground">{projectCounts[client.id] || 0}</p>
                     </div>
                   </div>
                 </div>
