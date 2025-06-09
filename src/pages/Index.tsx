@@ -1,3 +1,4 @@
+
 import { useState, useEffect } from "react";
 import { Sidebar } from "@/components/Sidebar";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
@@ -21,7 +22,6 @@ import { UserMenu } from "@/components/UserMenu";
 import { RoleDashboardRouter } from "@/components/RoleDashboardRouter";
 import { RosterReport } from "@/components/RosterReport";
 import { FloatingNavigation } from "@/components/FloatingNavigation";
-import { ThemeSwitcher } from "@/components/ThemeSwitcher";
 import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/integrations/supabase/client";
 
@@ -132,7 +132,7 @@ const Index = () => {
   };
 
   return (
-    <div className="flex h-screen bg-background">
+    <div className="flex h-screen bg-gray-50">
       {/* Desktop Sidebar - Hidden on mobile */}
       <div className="hidden md:block">
         <Sidebar 
@@ -148,7 +148,7 @@ const Index = () => {
         sidebarCollapsed ? 'md:ml-16' : 'md:ml-64'
       }`}>
         {/* Sticky Header */}
-        <div className="sticky top-0 z-40 flex justify-between items-center p-2 md:p-4 bg-background border-b border-border">
+        <div className="sticky top-0 z-40 flex justify-between items-center p-2 md:p-4 bg-white border-b border-gray-200">
           {/* Left side - Navigation Toggle + App Name */}
           <div className="flex items-center flex-1">
             {/* Navigation Toggle */}
@@ -181,17 +181,14 @@ const Index = () => {
 
             {/* App Name - Always visible on mobile, visible on desktop when sidebar collapsed */}
             <div className={`flex-1 ${sidebarCollapsed ? 'md:block' : 'md:hidden'} block`}>
-              <h1 className="text-xl md:text-2xl font-semibold text-foreground">
+              <h1 className="text-xl md:text-2xl font-semibold text-gray-900">
                 Schedule & Payroll
               </h1>
             </div>
           </div>
 
-          {/* Right side - Theme Switcher + Fullscreen + Notifications + User Menu */}
+          {/* Right side - Fullscreen + Notifications + User Menu */}
           <div className="flex items-center gap-2 md:gap-4">
-            {/* Theme Switcher */}
-            <ThemeSwitcher />
-
             {/* Fullscreen Toggle */}
             <Button
               variant="ghost"

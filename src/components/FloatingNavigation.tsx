@@ -139,10 +139,10 @@ export const FloatingNavigation = ({ activeTab, onTabChange, hasPermission }: Fl
         </DrawerTrigger>
 
         {/* Drawer Content */}
-        <DrawerContent className="h-full w-80 fixed right-0 top-0 rounded-none border-l border-border bg-background">
+        <DrawerContent className="h-full w-80 fixed right-0 top-0 rounded-none border-l">
           <div className="flex flex-col h-full p-4">
             <div className="flex items-center justify-between mb-6">
-              <h2 className="text-lg font-semibold text-foreground">Navigation</h2>
+              <h2 className="text-lg font-semibold">Navigation</h2>
               <Button
                 variant="ghost"
                 size="icon"
@@ -167,7 +167,7 @@ export const FloatingNavigation = ({ activeTab, onTabChange, hasPermission }: Fl
                         "flex flex-col items-center justify-center p-3 rounded-lg transition-colors text-xs min-h-[80px]",
                         isActive
                           ? "bg-primary text-primary-foreground"
-                          : "bg-muted hover:bg-muted/80 text-muted-foreground hover:text-foreground"
+                          : "bg-muted hover:bg-muted/80 text-muted-foreground"
                       )}
                     >
                       <Icon className="h-6 w-6 mb-2" />

@@ -207,7 +207,7 @@ export const ProjectManagement = () => {
   return (
     <div className="space-y-4 md:space-y-6 p-4 md:p-0">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-        <h1 className="text-2xl md:text-3xl font-bold text-foreground">Project Management</h1>
+        <h1 className="text-2xl md:text-3xl font-bold text-gray-900">Project Management</h1>
         <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
           <DialogTrigger asChild>
             <Button className="flex items-center gap-2 w-full sm:w-auto" onClick={() => {
@@ -312,21 +312,21 @@ export const ProjectManagement = () => {
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 md:gap-6">
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground">Total Projects</CardTitle>
+            <CardTitle className="text-sm font-medium text-gray-600">Total Projects</CardTitle>
             <FolderOpen className="h-5 w-5 text-blue-600" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold text-foreground">{projects.length}</div>
+            <div className="text-2xl font-bold text-gray-900">{projects.length}</div>
           </CardContent>
         </Card>
 
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground">Active</CardTitle>
+            <CardTitle className="text-sm font-medium text-gray-600">Active</CardTitle>
             <FolderOpen className="h-5 w-5 text-green-600" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold text-foreground">
+            <div className="text-2xl font-bold text-gray-900">
               {projects.filter(p => p.status === "active").length}
             </div>
           </CardContent>
@@ -334,11 +334,11 @@ export const ProjectManagement = () => {
 
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground">Completed</CardTitle>
+            <CardTitle className="text-sm font-medium text-gray-600">Completed</CardTitle>
             <FolderOpen className="h-5 w-5 text-purple-600" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold text-foreground">
+            <div className="text-2xl font-bold text-gray-900">
               {projects.filter(p => p.status === "completed").length}
             </div>
           </CardContent>
@@ -346,11 +346,11 @@ export const ProjectManagement = () => {
 
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground">Total Budget</CardTitle>
+            <CardTitle className="text-sm font-medium text-gray-600">Total Budget</CardTitle>
             <FolderOpen className="h-5 w-5 text-emerald-600" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold text-foreground">
+            <div className="text-2xl font-bold text-gray-900">
               ${projects.reduce((sum, p) => sum + p.budget, 0).toLocaleString()}
             </div>
           </CardContent>
@@ -362,7 +362,7 @@ export const ProjectManagement = () => {
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
             <CardTitle className="text-lg md:text-xl">Projects</CardTitle>
             <div className="relative w-full sm:w-64">
-              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground h-4 w-4" />
+              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
               <Input
                 placeholder="Search projects..."
                 value={searchTerm}
@@ -377,15 +377,15 @@ export const ProjectManagement = () => {
             {/* Mobile/Tablet Card Layout */}
             <div className="block lg:hidden space-y-3 p-4">
               {filteredProjects.map((project) => (
-                <div key={project.id} className="bg-card border border-border rounded-lg p-4 space-y-3">
+                <div key={project.id} className="bg-white border rounded-lg p-4 space-y-3">
                   <div className="flex items-start justify-between">
                     <div className="flex-1 min-w-0">
-                      <h3 className="font-medium text-sm text-foreground truncate">
+                      <h3 className="font-medium text-sm text-gray-900 truncate">
                         {project.name}
                       </h3>
-                      <p className="text-xs text-muted-foreground truncate">{project.clients?.company}</p>
+                      <p className="text-xs text-gray-500 truncate">{project.clients?.company}</p>
                       {project.description && (
-                        <p className="text-xs text-muted-foreground line-clamp-2 mt-1">{project.description}</p>
+                        <p className="text-xs text-gray-500 line-clamp-2 mt-1">{project.description}</p>
                       )}
                     </div>
                     <div className="flex items-center gap-2">
@@ -398,12 +398,12 @@ export const ProjectManagement = () => {
                   
                   <div className="grid grid-cols-2 gap-3 text-xs">
                     <div>
-                      <span className="text-muted-foreground">Start Date:</span>
-                      <p className="font-medium text-foreground">{project.start_date}</p>
+                      <span className="text-gray-500">Start Date:</span>
+                      <p className="font-medium">{project.start_date}</p>
                     </div>
                     <div>
-                      <span className="text-muted-foreground">Budget:</span>
-                      <p className="font-medium text-foreground">${project.budget.toLocaleString()}</p>
+                      <span className="text-gray-500">Budget:</span>
+                      <p className="font-medium">${project.budget.toLocaleString()}</p>
                     </div>
                   </div>
                 </div>
