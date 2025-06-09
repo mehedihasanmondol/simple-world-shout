@@ -1,3 +1,4 @@
+
 import { useState, useEffect } from "react";
 import { Sidebar } from "@/components/Sidebar";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
@@ -23,7 +24,6 @@ import { RosterReport } from "@/components/RosterReport";
 import { FloatingNavigation } from "@/components/FloatingNavigation";
 import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/integrations/supabase/client";
-import { Settings } from "@/components/Settings";
 
 const Index = () => {
   const [activeTab, setActiveTab] = useState("dashboard");
@@ -126,8 +126,6 @@ const Index = () => {
         return <BankBalance />;
       case "permissions":
         return <RolePermissionsManager />;
-      case "settings":
-        return <Settings />;
       default:
         return <Dashboard />;
     }

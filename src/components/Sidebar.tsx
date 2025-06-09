@@ -1,3 +1,4 @@
+
 import { useState, useEffect } from "react";
 import { cn } from "@/lib/utils";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -15,8 +16,7 @@ import {
   Menu,
   Shield,
   User,
-  Calculator,
-  SettingsIcon
+  Calculator
 } from "lucide-react";
 
 interface SidebarProps {
@@ -142,12 +142,6 @@ export const Sidebar = ({ activeTab, onTabChange, hasPermission, onCollapsedChan
       label: "Permissions", 
       icon: Shield,
       permission: "employees_manage"
-    },
-    { 
-      id: "settings", 
-      label: "Settings", 
-      icon: SettingsIcon,
-      permission: "employees_manage" // Only admins can access settings
     },
   ];
 

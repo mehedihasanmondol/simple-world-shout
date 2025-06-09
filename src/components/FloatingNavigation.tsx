@@ -20,8 +20,7 @@ import {
   Shield,
   User,
   Calculator,
-  ChevronLeft,
-  Settings as SettingsIcon
+  ChevronLeft
 } from "lucide-react";
 
 interface FloatingNavigationProps {
@@ -110,12 +109,6 @@ export const FloatingNavigation = ({ activeTab, onTabChange, hasPermission }: Fl
       id: "permissions", 
       label: "Permissions", 
       icon: Shield,
-      permission: "employees_manage"
-    },
-    { 
-      id: "settings", 
-      label: "Settings", 
-      icon: SettingsIcon,
       permission: "employees_manage"
     },
   ];
